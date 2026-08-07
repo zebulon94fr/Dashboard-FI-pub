@@ -16,7 +16,7 @@ SCHEMA = """
 -- ── Comptes créés par l'utilisateur ─────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS accounts (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    nom            TEXT    NOT NULL,              -- libellé libre : « PEA Bourse Direct »
+    nom            TEXT    NOT NULL,              -- libellé libre : « PEA — mon courtier »
     type           TEXT    NOT NULL,              -- pea | cto | per | av | metaux | crypto
     etablissement  TEXT    DEFAULT '',            -- courtier, banque, assureur, plateforme…
     date_ouverture TEXT    DEFAULT '',            -- YYYY-MM-DD — sert aux règles fiscales

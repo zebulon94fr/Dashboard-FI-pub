@@ -106,7 +106,7 @@ python scripts/demo_data.py --reset   # repartir d'une base vide
 
 Les cours viennent de Yahoo Finance via [yfinance](https://github.com/ranaroussi/yfinance).
 Le ticker se trouve sur [finance.yahoo.com](https://finance.yahoo.com) — par exemple
-`AI.PA` (Air Liquide), `MSFT` (Microsoft), `BTC-EUR` (Bitcoin), `GC=F` (once d'or).
+`BN.PA` (Danone), `MSFT` (Microsoft), `BTC-EUR` (Bitcoin), `GC=F` (once d'or).
 
 Le moteur est identique pour toutes les enveloppes : le cours est récupéré dans la devise
 de la position, puis converti en euros au taux du moment. Les valorisations, plus-values et

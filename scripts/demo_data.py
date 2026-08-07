@@ -21,9 +21,9 @@ COMPTES = [
         "compte": {"nom": "PEA", "type": "pea", "etablissement": "Courtier en ligne",
                    "date_ouverture": "2018-03-15", "cible_pct": 35},
         "positions": [
-            {"nom": "Air Liquide", "ticker": "AI.PA", "isin": "FR0000120073", "secteur": "Industrie", "zone": "Europe", "quantite": 25, "pru": 148.20, "cours": 168.40},
-            {"nom": "Sanofi", "ticker": "SAN.PA", "isin": "FR0000120578", "secteur": "Santé", "zone": "Europe", "quantite": 40, "pru": 88.10, "cours": 94.35},
-            {"nom": "Amundi MSCI World UCITS ETF", "ticker": "CW8.PA", "secteur": "ETF diversifié", "zone": "Monde", "quantite": 30, "pru": 420.00, "cours": 498.70},
+            {"nom": "Danone", "ticker": "BN.PA", "isin": "FR0000120644", "secteur": "Consommation", "zone": "Europe", "quantite": 25, "pru": 58.20, "cours": 68.40},
+            {"nom": "Michelin", "ticker": "ML.PA", "isin": "FR001400AJ45", "secteur": "Industrie", "zone": "Europe", "quantite": 40, "pru": 28.10, "cours": 34.35},
+            {"nom": "ETF MSCI World", "ticker": "IWDA.AS", "secteur": "ETF diversifié", "zone": "Monde", "quantite": 120, "pru": 78.30, "cours": 96.10},
         ],
     },
     {
@@ -31,7 +31,7 @@ COMPTES = [
                    "date_ouverture": "2021-06-01", "cible_pct": 20},
         "positions": [
             {"nom": "Microsoft", "ticker": "MSFT", "secteur": "Technologie", "zone": "États-Unis", "quantite": 12, "pru": 310.00, "cours": 425.50, "devise": "USD"},
-            {"nom": "Air Products", "ticker": "APD", "secteur": "Industrie", "zone": "États-Unis", "quantite": 8, "pru": 265.00, "cours": 288.20, "devise": "USD"},
+            {"nom": "Johnson & Johnson", "ticker": "JNJ", "secteur": "Santé", "zone": "États-Unis", "quantite": 15, "pru": 152.00, "cours": 163.40, "devise": "USD"},
         ],
     },
     {
