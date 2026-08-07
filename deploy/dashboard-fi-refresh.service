@@ -1,12 +1,21 @@
 [Unit]
-Description=Rafraîchissement des cours Dashboard FI
+Description=Rafraîchissement des cours — Dashboard FI
 After=dashboard-fi.service
-Requires=dashboard-fi.service
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
-# Adaptez ce chemin si /opt/dashboard-fi n'est pas votre répertoire d'installation
-WorkingDirectory=/opt/dashboard-fi
-ExecStart=/opt/dashboard-fi/scripts/refresh_quotes.sh
 User=dashboard
 Group=dashboard
+WorkingDirectory=/opt/dashboard-fi
+EnvironmentFile=-/etc/default/dashboard-fi
+Environment=HOME=/opt/dashboard-fi
+Environment=XDG_CACHE_HOME=/opt/dashboard-fi/.cache
+ExecStart=/opt/dashboard-fi/scripts/refresh_quotes.sh
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/dashboard-fi

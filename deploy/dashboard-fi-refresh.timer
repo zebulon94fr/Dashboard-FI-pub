@@ -1,8 +1,11 @@
 [Unit]
-Description=Rafraîchit les cours du Dashboard FI toutes les heures
+Description=Rafraîchit les cours toutes les heures
 
 [Timer]
 OnCalendar=hourly
+# Évite d'interroger Yahoo Finance à la seconde pile, comme tout le monde.
+RandomizedDelaySec=5m
+# Rattrape l'exécution manquée si le serveur était éteint à l'heure prévue.
 Persistent=true
 
 [Install]

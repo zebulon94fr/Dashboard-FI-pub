@@ -1,5 +1,5 @@
 [Unit]
-Description=Envoie le résumé Telegram chaque samedi à 9h
+Description=Envoie le résumé Telegram chaque samedi à 9 h
 
 [Timer]
 OnCalendar=Sat *-*-* 09:00:00

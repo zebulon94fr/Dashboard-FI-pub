@@ -84,6 +84,10 @@ Variables d'environnement :
 | `DASHBOARD_DB` | `./dashboard.db` | Emplacement de la base SQLite |
 | `DASHBOARD_SSL_CERT` | — | Certificat TLS (voir [HTTPS](#https)) |
 | `DASHBOARD_SSL_KEY` | — | Clé privée TLS |
+| `DASHBOARD_WORKERS` | `2` | Processus gunicorn (déploiement en service) |
+
+En déploiement systemd, ces variables se règlent dans `/etc/default/dashboard-fi` plutôt
+qu'à la ligne de commande — voir [Déploiement permanent](#déploiement-permanent-debian).
 
 ## Premiers pas
 
@@ -171,43 +175,92 @@ Le certificat étant auto-signé, le navigateur affiche un avertissement la prem
 
 ## Déploiement permanent (Debian)
 
+Le dashboard tourne comme service systemd : il démarre au boot du serveur, redémarre seul
+après un crash, et n'a besoin d'aucune session ouverte.
+
 ```bash
-# 1. Installer
 sudo mkdir -p /opt/dashboard-fi && sudo chown $USER /opt/dashboard-fi
 git clone https://github.com/zebulon94fr/Dashboard-FI-pub.git /opt/dashboard-fi
 cd /opt/dashboard-fi
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
-# 2. Certificat TLS (adapter à l'IP ou au nom d'hôte du serveur)
-./scripts/generate_cert.sh 192.168.1.50
-
-# 3. Utilisateur dédié
-sudo useradd -r -s /usr/sbin/nologin dashboard
-sudo chown -R dashboard:dashboard /opt/dashboard-fi
-
-# 4. Service systemd
-sudo cp deploy/dashboard-fi.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now dashboard-fi
+sudo ./scripts/install_service.sh
 ```
 
-Le service redémarre automatiquement après un crash et au reboot, via `gunicorn`. Adaptez
-les chemins dans les fichiers de `deploy/` si votre répertoire d'installation diffère.
+Le script est idempotent — relancez-le après chaque `git pull`. Il crée l'utilisateur
+système `dashboard`, installe les dépendances dans `.venv`, écrit la configuration dans
+`/etc/default/dashboard-fi`, installe les unités systemd puis active et démarre le service.
+Les chemins des unités sont réécrits à la volée : rien à modifier si vous installez
+ailleurs que dans `/opt/dashboard-fi`.
 
-Timers optionnels, à installer de la même façon :
-
-| Timer | Rôle | Fréquence par défaut |
-|---|---|---|
-| `dashboard-fi-refresh.timer` | Actualise les cours sans ouvrir le dashboard | toutes les heures |
-| `dashboard-fi-backup.timer` | Sauvegarde `dashboard.db` dans `backups/` | quotidienne, rétention 14 jours |
-| `dashboard-fi-telegram.timer` | Envoie le résumé Telegram | samedi 9 h |
+Options :
 
 ```bash
-sudo cp deploy/dashboard-fi-refresh.{service,timer} /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now dashboard-fi-refresh.timer
-systemctl list-timers | grep dashboard-fi
+sudo ./scripts/install_service.sh --no-timers      # service seul, sans tâches planifiées
+sudo ./scripts/install_service.sh --with-telegram  # + résumé Telegram hebdomadaire
+sudo DASHBOARD_USER=finance ./scripts/install_service.sh   # autre utilisateur système
 ```
+
+### Configuration
+
+Port, base de données et HTTPS se règlent dans `/etc/default/dashboard-fi`, sans jamais
+toucher aux unités :
+
+```bash
+sudo nano /etc/default/dashboard-fi
+sudo systemctl restart dashboard-fi
+```
+
+Pour activer HTTPS : générez le certificat, décommentez les deux lignes `DASHBOARD_SSL_*`
+et passez `DASHBOARD_SCHEME` à `https`.
+
+```bash
+sudo -u dashboard ./scripts/generate_cert.sh 192.168.1.50
+```
+
+Si le certificat est déclaré mais illisible, le service refuse de démarrer plutôt que de
+servir en clair sans prévenir.
+
+### Tâches planifiées
+
+Elles sont installées avec le service et survivent au redémarrage. `Persistent=true`
+rattrape l'exécution manquée si le serveur était éteint à l'heure prévue.
+
+| Timer | Rôle | Fréquence |
+|---|---|---|
+| `dashboard-fi-refresh.timer` | Actualise les cours sans ouvrir le dashboard | toutes les heures |
+| `dashboard-fi-backup.timer` | Sauvegarde la base dans `backups/` | quotidienne, rétention 14 jours |
+| `dashboard-fi-telegram.timer` | Envoie le résumé Telegram | samedi 9 h (option `--with-telegram`) |
+
+### Exploitation
+
+```bash
+systemctl status dashboard-fi              # état du service
+journalctl -u dashboard-fi -f              # logs en direct
+systemctl restart dashboard-fi             # après modification de la configuration
+systemctl list-timers 'dashboard-fi*'      # prochaines exécutions planifiées
+systemctl start dashboard-fi-backup        # déclencher une sauvegarde immédiatement
+```
+
+Si un pare-feu est actif :
+
+```bash
+sudo ufw allow 8742/tcp
+```
+
+### Ce que fait l'unité
+
+- `Restart=always` avec 5 s d'attente : le service revient après un crash comme après un
+  arrêt propre du processus. Au-delà de 5 échecs en 5 minutes, systemd cesse d'insister —
+  c'est le signe d'une erreur de configuration, pas d'une panne passagère.
+- `WantedBy=multi-user.target` : démarrage automatique au boot.
+- `After=network-online.target` : le réseau est disponible avant la première requête de cours.
+- Durcissement : `ProtectSystem=strict` et `ReadWritePaths` limitent l'écriture au seul
+  répertoire d'installation ; `NoNewPrivileges`, `PrivateTmp` et `ProtectHome` réduisent la
+  surface d'attaque d'un service qui expose des données financières.
+
+`ProtectHome=true` bloque l'accès à `/home` : si vous installez sous `/home/<utilisateur>`
+plutôt que dans `/opt`, retirez cette ligne de `deploy/dashboard-fi.service` avant
+d'installer.
 
 ## API
 
@@ -259,9 +312,19 @@ Dashboard-FI-pub/
 │   ├── vendor/                # Chart.js servi localement (MIT)
 │   ├── manifest.json          # PWA
 │   └── sw.js                  # Service worker : cache le shell, jamais /api
-├── scripts/                # demo_data, set_password, set_telegram, generate_cert, backup…
-├── deploy/                 # Unités systemd
+├── scripts/                # Exploitation
+│   ├── install_service.sh     # Installation en service systemd (idempotent)
+│   ├── run_server.sh          # Lancement gunicorn, TLS optionnel — ExecStart de l'unité
+│   ├── backup_db.py           # Sauvegarde cohérente + purge, sans dépendance externe
+│   ├── refresh_quotes.sh      # Actualisation des cours en local
+│   ├── send_telegram_summary.sh
+│   ├── generate_cert.sh       # Certificat TLS auto-signé
+│   ├── set_password.py        # Authentification HTTP Basic
+│   ├── set_telegram.py        # Bot et chat_id Telegram
+│   └── demo_data.py           # Portefeuille de démonstration
+├── deploy/                 # Unités systemd + modèle de /etc/default/dashboard-fi
 ├── dashboard.db            # Base SQLite (non versionnée, créée au lancement)
+├── backups/                # Sauvegardes quotidiennes (non versionné)
 └── settings.json           # Clé API, identifiants, Telegram (non versionné)
 ```
 

@@ -11,3 +11,5 @@ certs/
 *.pem
 *.key
 backups/
+.gunicorn/
+.cache/

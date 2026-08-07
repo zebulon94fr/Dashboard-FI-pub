@@ -1,20 +1,44 @@
 [Unit]
-Description=Dashboard FI
-After=network.target
+Description=Dashboard FI — tableau de bord d'investissement
+Documentation=https://github.com/zebulon94fr/Dashboard-FI-pub
+After=network-online.target
+Wants=network-online.target
+# Abandonne si le service échoue 5 fois en 5 minutes : c'est une erreur de
+# configuration, pas une panne passagère — inutile de boucler indéfiniment.
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
-# Adaptez ces chemins à votre installation (voir README > Déploiement Debian)
-WorkingDirectory=/opt/dashboard-fi
-ExecStart=/opt/dashboard-fi/.venv/bin/gunicorn --workers 2 --bind 0.0.0.0:8742 --certfile=/opt/dashboard-fi/certs/cert.pem --keyfile=/opt/dashboard-fi/certs/key.pem app:create_app()
-
-# Utilisateur dédié recommandé plutôt que root :
-#   sudo useradd -r -s /usr/sbin/nologin dashboard
-#   sudo chown -R dashboard:dashboard /opt/dashboard-fi
+Type=exec
 User=dashboard
 Group=dashboard
+WorkingDirectory=/opt/dashboard-fi
 
-Restart=on-failure
+# Port, base, TLS : voir /etc/default/dashboard-fi (le « - » rend le fichier optionnel).
+EnvironmentFile=-/etc/default/dashboard-fi
+# yfinance écrit un cache : sans HOME accessible, l'actualisation des cours échoue.
+Environment=HOME=/opt/dashboard-fi
+Environment=XDG_CACHE_HOME=/opt/dashboard-fi/.cache
+
+ExecStart=/opt/dashboard-fi/scripts/run_server.sh
+
+# Redémarre dans tous les cas, y compris après un arrêt propre du processus.
+Restart=always
 RestartSec=5
+
+# Durcissement : le service ne peut écrire que dans son répertoire d'installation.
+# ProtectHome bloque /home — à retirer si vous installez sous /home/<utilisateur>.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/dashboard-fi
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
 
 [Install]
 WantedBy=multi-user.target

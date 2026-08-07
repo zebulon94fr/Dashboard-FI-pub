@@ -1,8 +1,9 @@
 [Unit]
-Description=Sauvegarde quotidienne de dashboard.db
+Description=Sauvegarde quotidienne de la base
 
 [Timer]
 OnCalendar=daily
+RandomizedDelaySec=30m
 Persistent=true
 
 [Install]
