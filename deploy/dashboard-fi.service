@@ -1,0 +1,20 @@
+[Unit]
+Description=Dashboard FI
+After=network.target
+
+[Service]
+# Adaptez ces chemins à votre installation (voir README > Déploiement Debian)
+WorkingDirectory=/opt/dashboard-fi
+ExecStart=/opt/dashboard-fi/.venv/bin/gunicorn --workers 2 --bind 0.0.0.0:8742 --certfile=/opt/dashboard-fi/certs/cert.pem --keyfile=/opt/dashboard-fi/certs/key.pem app:create_app()
+
+# Utilisateur dédié recommandé plutôt que root :
+#   sudo useradd -r -s /usr/sbin/nologin dashboard
+#   sudo chown -R dashboard:dashboard /opt/dashboard-fi
+User=dashboard
+Group=dashboard
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

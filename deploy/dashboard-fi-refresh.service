@@ -1,0 +1,12 @@
+[Unit]
+Description=Rafraîchissement des cours Dashboard FI
+After=dashboard-fi.service
+Requires=dashboard-fi.service
+
+[Service]
+Type=oneshot
+# Adaptez ce chemin si /opt/dashboard-fi n'est pas votre répertoire d'installation
+WorkingDirectory=/opt/dashboard-fi
+ExecStart=/opt/dashboard-fi/scripts/refresh_quotes.sh
+User=dashboard
+Group=dashboard

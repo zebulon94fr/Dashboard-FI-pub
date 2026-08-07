@@ -1,0 +1,9 @@
+[Unit]
+Description=Rafraîchit les cours du Dashboard FI toutes les heures
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,13 @@
+settings.json
+dashboard.db
+dashboard.db-shm
+dashboard.db-wal
+.claude/
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+certs/
+*.pem
+*.key
+backups/

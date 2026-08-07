@@ -1,0 +1,10 @@
+[Unit]
+Description=Sauvegarde de dashboard.db
+
+[Service]
+Type=oneshot
+# Adaptez ce chemin si /opt/dashboard-fi n'est pas votre répertoire d'installation
+WorkingDirectory=/opt/dashboard-fi
+ExecStart=/opt/dashboard-fi/scripts/backup_db.sh
+User=dashboard
+Group=dashboard

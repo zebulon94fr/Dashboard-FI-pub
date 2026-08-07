@@ -1,0 +1,12 @@
+[Unit]
+Description=Résumé Telegram — Dashboard FI
+After=dashboard-fi.service
+Requires=dashboard-fi.service
+
+[Service]
+Type=oneshot
+# Adaptez ce chemin si /opt/dashboard-fi n'est pas votre répertoire d'installation
+WorkingDirectory=/opt/dashboard-fi
+ExecStart=/opt/dashboard-fi/scripts/send_telegram_summary.sh
+User=dashboard
+Group=dashboard

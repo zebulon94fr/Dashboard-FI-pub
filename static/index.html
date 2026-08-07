@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard FI</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#58a6ff">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<!-- Chart.js est servi localement : le dashboard fonctionne hors ligne (PWA) et
+     n'expose rien à un CDN tiers. -->
+<script src="vendor/chart.umd.min.js"></script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-brand">📊 Dashboard FI</div>
+
+  <div class="nav-item active" data-tab="overview" onclick="showTab('overview')">Vue d'ensemble</div>
+
+  <div class="nav-group">
+    <div class="nav-item nav-group-toggle" id="comptesToggle" onclick="toggleComptesMenu()">
+      <span>Mes comptes</span>
+      <span class="chevron" id="comptesChevron">▾</span>
+    </div>
+    <!-- Rempli dynamiquement : un lien par compte créé + « gérer les comptes » -->
+    <div class="nav-submenu" id="comptesSubmenu"></div>
+  </div>
+
+  <div class="nav-item" data-tab="simulation" onclick="showTab('simulation')">📈 Simulation</div>
+  <div class="nav-item" data-tab="dividendes" onclick="showTab('dividendes')">💰 Dividendes</div>
+  <div class="nav-item" data-tab="history" onclick="showTab('history')">Historique</div>
+  <div class="nav-item" data-tab="fiscalite" onclick="showTab('fiscalite')">⚖️ Fiscalité</div>
+  <div class="nav-item" data-tab="rebalancing" onclick="showTab('rebalancing')">⚖ Rebalancing</div>
+  <div class="nav-item" data-tab="ia" onclick="showTab('ia')">Arbitrage IA</div>
+</nav>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+<!-- MAIN -->
+<div class="main">
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <button class="hamburger-btn" onclick="toggleSidebar()" title="Menu" aria-label="Menu">☰</button>
+    <div class="quote-status">
+      <div class="dot" id="quoteDot"></div>
+      <span id="quoteLabel">—</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <button class="btn hide-toggle" id="btnHide" onclick="toggleHide()" title="Masquer/afficher les montants">👁</button>
+    <button class="btn" id="btnTheme" onclick="toggleTheme()" title="Thème clair/sombre">🌙</button>
+    <button class="btn" id="btnRefresh" onclick="refreshQuotes()">⟳ Actualiser les cours</button>
+    <button class="btn export" onclick="exportCSV()">⬇ Export CSV</button>
+    <button class="btn primary" onclick="openAccountModal()">+ Compte</button>
+    <button class="btn primary" onclick="openPositionModal()">+ Position</button>
+    <button class="btn" id="btnTelegram" onclick="sendTelegramSummary()" title="Envoyer le résumé sur Telegram">📱 Telegram</button>
+  </div>
+</div>
+
+<!-- CONTENT -->
+<div class="content">
+
+  <!-- VUE D'ENSEMBLE -->
+  <div id="sec-overview" class="section active">
+    <div id="overviewEmpty"></div>
+    <div id="overviewBody">
+      <div class="cards" id="overviewCards"></div>
+      <div class="chart-grid">
+        <div class="chart-box">
+          <div class="chart-title">Répartition par compte</div>
+          <div class="chart-wrap"><canvas id="chartAlloc"></canvas></div>
+        </div>
+        <div class="chart-box">
+          <div class="chart-title">Répartition par type d'enveloppe</div>
+          <div class="chart-wrap"><canvas id="chartType"></canvas></div>
+        </div>
+      </div>
+      <div class="chart-box" style="margin-bottom:16px">
+        <div class="chart-title">Performance par compte (%)</div>
+        <div class="chart-wrap h180"><canvas id="chartPerf"></canvas></div>
+      </div>
+      <div class="chart-box" style="margin-bottom:16px">
+        <div class="chart-title">Top 10 positions (valorisation)</div>
+        <div class="chart-wrap h180"><canvas id="chartTop10"></canvas></div>
+      </div>
+      <div class="chart-grid">
+        <div class="chart-box">
+          <div class="chart-title">Répartition par secteur</div>
+          <div class="chart-wrap"><canvas id="chartSecteur"></canvas></div>
+          <div class="chart-hint" id="hintSecteur"></div>
+        </div>
+        <div class="chart-box">
+          <div class="chart-title">Répartition géographique</div>
+          <div class="chart-wrap"><canvas id="chartGeo"></canvas></div>
+          <div class="chart-hint" id="hintGeo"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GESTION DES COMPTES -->
+  <div id="sec-comptes" class="section">
+    <div class="section-header">
+      <div class="section-title">Mes comptes</div>
+      <button class="btn primary" onclick="openAccountModal()">+ Nouveau compte</button>
+    </div>
+    <div class="intro-box">
+      Créez une enveloppe par compte réel que vous détenez — PEA, compte-titres, PER,
+      assurance vie, métaux précieux ou cryptomonnaies. Le type choisi détermine les
+      règles fiscales appliquées dans l'onglet Fiscalité et l'unité des quantités.
+    </div>
+    <div id="comptesList"></div>
+  </div>
+
+  <!-- PAGE D'UN COMPTE (générique, remplie par accounts.js) -->
+  <div id="sec-compte" class="section">
+    <div class="section-header">
+      <div>
+        <div class="section-title" id="compteTitre">—</div>
+        <div class="section-subtitle" id="compteSousTitre"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="editCurrentAccount()">✏️ Modifier</button>
+        <button class="btn primary" onclick="openPositionModal()">+ Position</button>
+      </div>
+    </div>
+    <div class="cards" id="compteCards"></div>
+    <div class="table-wrap"><table id="compteTable"></table></div>
+  </div>
+
+  <!-- HISTORIQUE -->
+  <div id="sec-history" class="section">
+    <div class="section-header">
+      <div class="section-title">Historique de valorisation</div>
+    </div>
+    <div class="history-controls">
+      <span style="font-size:12px;color:var(--muted)">Période :</span>
+      <button class="period-btn" onclick="setPeriod(30)">1M</button>
+      <button class="period-btn active" onclick="setPeriod(90)">3M</button>
+      <button class="period-btn" onclick="setPeriod(180)">6M</button>
+      <button class="period-btn" onclick="setPeriod(365)">1A</button>
+      <button class="period-btn" onclick="setPeriod(9999)">Tout</button>
+      <span style="font-size:12px;color:var(--muted);margin-left:16px">Indices :</span>
+      <span id="bmChecks" style="display:flex;gap:10px;flex-wrap:wrap"></span>
+      <button class="period-btn" id="bmLoadBtn" onclick="loadBenchmark()" style="margin-left:4px">⟳ Charger</button>
+    </div>
+    <div id="bmStatus" style="font-size:11px;color:var(--muted);margin-bottom:8px;padding:0 4px"></div>
+    <div class="chart-box" style="margin-bottom:16px">
+      <div class="chart-title">Évolution du patrimoine total vs indices</div>
+      <div class="chart-wrap h200"><canvas id="chartHistTotal"></canvas></div>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">Évolution par compte</div>
+      <div class="chart-wrap h200"><canvas id="chartHistCompt"></canvas></div>
+    </div>
+  </div>
+
+  <!-- SIMULATION -->
+  <div id="sec-simulation" class="section">
+    <div class="section-header">
+      <div class="section-title">Simulateur de performance</div>
+    </div>
+
+    <div class="sim-params-grid">
+      <div class="sim-param-card">
+        <div class="sim-param-title">🕐 Horizon</div>
+        <div class="sim-slider-row">
+          <input type="range" id="simYears" min="1" max="40" value="20" oninput="simUpdate()">
+          <span class="sim-val" id="simYearsVal">20 ans</span>
+        </div>
+      </div>
+
+      <div class="sim-param-card">
+        <div class="sim-param-title">📈 Rendement annuel</div>
+        <div class="sim-presets">
+          <button class="sim-preset" onclick="setSimReturn(4)">Prudent 4%</button>
+          <button class="sim-preset active" onclick="setSimReturn(7)">Modéré 7%</button>
+          <button class="sim-preset" onclick="setSimReturn(10)">Optimiste 10%</button>
+        </div>
+        <div class="sim-slider-row">
+          <input type="range" id="simReturn" min="0" max="20" step="0.5" value="7" oninput="simUpdate()">
+          <span class="sim-val" id="simReturnVal">7,0 %/an</span>
+        </div>
+      </div>
+
+      <div class="sim-param-card">
+        <div class="sim-param-title">💶 Versement mensuel</div>
+        <div class="sim-slider-row">
+          <input type="range" id="simMonthly" min="0" max="5000" step="50" value="500" oninput="simUpdate()">
+          <span class="sim-val" id="simMonthlyVal">500 €/mois</span>
+        </div>
+      </div>
+
+      <div class="sim-param-card">
+        <div class="sim-param-title">📊 Inflation</div>
+        <div class="sim-slider-row">
+          <input type="range" id="simInflation" min="0" max="6" step="0.5" value="2" oninput="simUpdate()">
+          <span class="sim-val" id="simInflationVal">2,0 %/an</span>
+        </div>
+      </div>
+
+      <div class="sim-param-card">
+        <div class="sim-param-title">⚠️ Scénarios</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <label class="sim-check"><input type="checkbox" id="simBear" onchange="simUpdate()"> 🐻 Pessimiste (−3%)</label>
+          <label class="sim-check"><input type="checkbox" id="simBull" onchange="simUpdate()"> 🐂 Optimiste (+3%)</label>
+          <label class="sim-check"><input type="checkbox" id="simReal" checked onchange="simUpdate()"> 💶 Réel (hors inflation)</label>
+        </div>
+      </div>
+
+      <div class="sim-param-card">
+        <div class="sim-param-title">🚀 Point de départ</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <label class="sim-check"><input type="radio" name="simBase" value="current" checked onchange="simUpdate()"> Valorisation actuelle</label>
+          <label class="sim-check"><input type="radio" name="simBase" value="invested" onchange="simUpdate()"> Investi (PRU × Qté)</label>
+          <label class="sim-check"><input type="radio" name="simBase" value="custom" onchange="simUpdate()"> Personnalisé</label>
+        </div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+          <input type="number" id="simCustomStart" value="0" step="1000" style="width:140px" oninput="simUpdate()" placeholder="Montant €">
+          <span style="font-size:11px;color:var(--muted)">€ de départ</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="cards" id="simCards" style="margin-top:16px"></div>
+
+    <div class="chart-box" style="margin-bottom:16px">
+      <div class="chart-title">Projection patrimoniale</div>
+      <div class="chart-wrap" style="height:280px"><canvas id="chartSim"></canvas></div>
+    </div>
+
+    <div class="chart-box">
+      <div class="chart-title">Tableau de projection annuelle</div>
+      <div class="table-wrap" style="max-height:320px;overflow-y:auto">
+        <table id="simTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIVIDENDES -->
+  <div id="sec-dividendes" class="section">
+    <div class="section-header">
+      <div class="section-title">💰 Dividendes & revenus</div>
+      <button class="btn primary" onclick="openDivModal()">+ Dividende</button>
+    </div>
+
+    <div class="cards" id="divCards" style="margin-bottom:16px"></div>
+
+    <div class="chart-grid" style="margin-bottom:16px">
+      <div class="chart-box">
+        <div class="chart-title">Revenus mensuels (12 derniers mois)</div>
+        <div class="chart-wrap h200"><canvas id="chartDivMois"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">Revenus par année</div>
+        <div class="chart-wrap h200"><canvas id="chartDivAnnee"></canvas></div>
+      </div>
+    </div>
+
+    <div class="chart-grid" style="margin-bottom:16px">
+      <div class="chart-box">
+        <div class="chart-title">Top positions (dividendes cumulés)</div>
+        <table id="divTopPos" style="width:100%;font-size:13px;border-collapse:collapse"></table>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">TRI par position (rendement total)</div>
+        <div id="divTRI" style="font-size:13px;line-height:1.8;padding:4px"></div>
+      </div>
+    </div>
+
+    <div class="chart-box">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap">
+        <div class="chart-title" style="margin-bottom:0">Historique des versements</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="divFilterAnnee" onchange="loadDividendes()" style="width:120px;padding:4px 8px;font-size:12px">
+            <option value="">Toutes années</option>
+          </select>
+          <select id="divFilterCompte" onchange="loadDividendes()" style="width:160px;padding:4px 8px;font-size:12px">
+            <option value="">Tous les comptes</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="divTable" style="width:100%;font-size:13px;border-collapse:collapse"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- FISCALITÉ -->
+  <div id="sec-fiscalite" class="section">
+    <div class="section-header">
+      <div class="section-title">⚖️ Fiscalité</div>
+      <button class="btn" onclick="renderFiscalite()">⟳ Recalculer</button>
+    </div>
+    <div class="intro-box">
+      Les règles appliquées découlent du type de chaque compte et de sa date d'ouverture.
+      Ces simulations sont indicatives et ne remplacent pas l'avis d'un conseiller fiscal.
+    </div>
+    <div class="tab-row" id="fiscTabs"></div>
+    <div id="fiscContent"></div>
+  </div>
+
+  <!-- REBALANCING -->
+  <div id="sec-rebalancing" class="section">
+    <div class="section-header">
+      <div class="section-title">⚖ Rebalancing</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="rbSauvegarderCibles()">💾 Sauvegarder les cibles</button>
+        <button class="btn primary" onclick="rbCalculer()">⟳ Recalculer</button>
+      </div>
+    </div>
+
+    <div class="intro-box">
+      Définissez une allocation cible par compte (en %). Le moteur calcule les écarts par
+      rapport à l'allocation réelle et propose les mouvements d'achat ou d'allègement
+      nécessaires — par apport de capital ou par arbitrage interne.
+    </div>
+
+    <div class="cards" id="rbKpis" style="margin-bottom:16px"></div>
+
+    <div class="chart-grid" style="margin-bottom:16px">
+      <div class="chart-box">
+        <div class="chart-title">Allocation cible par compte (%)</div>
+        <div id="rbCiblesForm" style="margin-top:4px"></div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:var(--muted)">Total des cibles</span>
+          <span style="font-size:15px;font-weight:700" id="rbTotalCibles">0 %</span>
+        </div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">Allocation réelle vs cible</div>
+        <div class="chart-wrap h200"><canvas id="rbChartAlloc" role="img" aria-label="Comparaison allocation réelle vs cible par compte"></canvas></div>
+      </div>
+    </div>
+
+    <div class="chart-box" style="margin-bottom:16px">
+      <div class="chart-title">Paramètres de rééquilibrage</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-top:8px">
+        <div>
+          <label class="field-label">Mode de rééquilibrage</label>
+          <select id="rbMode" onchange="rbCalculer()" style="width:100%;padding:8px 10px;font-size:13px">
+            <option value="apport">Apport de capital uniquement</option>
+            <option value="arbitrage">Arbitrage interne (vente + achat)</option>
+            <option value="mixte">Mixte (apport + arbitrage)</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Montant d'apport (€)</label>
+          <input type="text" id="rbApport" value="0" oninput="rbCalculer()" style="width:100%;padding:8px 10px;font-size:13px">
+        </div>
+        <div>
+          <label class="field-label">Seuil de déclenchement</label>
+          <select id="rbSeuil" onchange="rbCalculer()" style="width:100%;padding:8px 10px;font-size:13px">
+            <option value="2">2 % d'écart</option>
+            <option value="3">3 % d'écart</option>
+            <option value="5" selected>5 % d'écart</option>
+            <option value="10">10 % d'écart</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-box" style="margin-bottom:16px">
+      <div class="chart-title">Analyse des écarts par compte</div>
+      <div class="table-wrap" style="border:none;border-radius:0;margin-top:8px">
+        <table id="rbTableEcarts" style="width:100%;font-size:13px;border-collapse:collapse"></table>
+      </div>
+    </div>
+
+    <div class="chart-box">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="chart-title" style="margin-bottom:0">Mouvements recommandés</div>
+        <span style="font-size:11px;color:var(--muted)" id="rbOrdresInfo"></span>
+      </div>
+      <div id="rbOrdres"></div>
+    </div>
+  </div>
+
+  <!-- IA -->
+  <div id="sec-ia" class="section">
+    <div class="section-header">
+      <div class="section-title">Arbitrage IA (Claude)</div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px;max-width:400px">
+      <label>Clé API Anthropic</label>
+      <input type="password" id="apiKey" placeholder="sk-ant-..." oninput="saveKey()">
+    </div>
+    <div class="ia-grid">
+      <div class="ia-sidebar">
+        <div class="ia-modes" id="iaModes">
+          <label><input type="radio" name="mode" value="global" checked> 🌐 Analyse globale</label>
+          <label><input type="radio" name="mode" value="fiscal"> 🏛️ Optimisation fiscale</label>
+          <label><input type="radio" name="mode" value="risk"> ⚠️ Analyse des risques</label>
+          <label><input type="radio" name="mode" value="diversification"> 🎯 Diversification</label>
+          <label><input type="radio" name="mode" value="retraite"> 🧓 Préparation retraite</label>
+        </div>
+        <button class="btn primary" onclick="analyzeIA()" style="margin-top:4px">Analyser →</button>
+      </div>
+      <div class="ia-output" id="iaOutput">Sélectionnez un mode d'analyse et cliquez sur Analyser.</div>
+    </div>
+  </div>
+
+</div><!-- /content -->
+</div><!-- /main -->
+
+<!-- MODALE COMPTE -->
+<div class="overlay" id="accountModal">
+  <div class="modal">
+    <h2 id="accountModalTitle">Nouveau compte</h2>
+
+    <div class="form-group" style="margin-bottom:12px">
+      <label>Type d'enveloppe</label>
+      <div class="type-picker" id="accountTypePicker"></div>
+    </div>
+    <div class="type-help" id="accountTypeHelp"></div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Nom du compte</label>
+        <input type="text" id="aNom" placeholder="ex : PEA">
+      </div>
+      <div class="form-group">
+        <label>Établissement <span class="opt">optionnel</span></label>
+        <input type="text" id="aEtablissement" placeholder="ex : mon courtier">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Date d'ouverture <span class="opt">pour la fiscalité</span></label>
+        <input type="date" id="aDateOuverture">
+      </div>
+      <div class="form-group">
+        <label>Allocation cible (%) <span class="opt">optionnel</span></label>
+        <input type="text" id="aCible" placeholder="0">
+      </div>
+    </div>
+    <div class="form-group full" style="margin-bottom:12px">
+      <label>Note <span class="opt">optionnel</span></label>
+      <input type="text" id="aNote" placeholder="ex : contrat multisupport">
+    </div>
+    <div class="hint-box" id="accountDateHint"></div>
+    <div class="form-error" id="accountError"></div>
+
+    <div class="modal-footer">
+      <button class="btn danger" id="btnDeleteAccount" onclick="deleteCurrentAccount()" style="margin-right:auto;display:none">🗑 Supprimer</button>
+      <button class="btn" onclick="closeAccountModal()">Annuler</button>
+      <button class="btn primary" onclick="saveAccount()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE POSITION -->
+<div class="overlay" id="posModal">
+  <div class="modal">
+    <h2 id="modalTitle">Ajouter une position</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Compte</label>
+        <select id="fCompte" onchange="onPositionAccountChange()"></select>
+      </div>
+      <div class="form-group">
+        <label>Nom affiché</label>
+        <input type="text" id="fNom" placeholder="ex : Air Liquide" list="fNomList">
+        <datalist id="fNomList"></datalist>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Ticker Yahoo Finance <span class="opt">cours automatiques</span></label>
+        <input type="text" id="fTicker" placeholder="ex : AI.PA, MSFT, BTC-EUR" style="font-family:monospace" list="fTickerList">
+        <datalist id="fTickerList"></datalist>
+      </div>
+      <div class="form-group">
+        <label>ISIN <span class="opt">optionnel</span></label>
+        <input type="text" id="fIsin" placeholder="FR0000120073">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label id="fQtyLabel">Quantité</label>
+        <input type="text" id="fQty" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>Devise</label>
+        <select id="fDevise" onchange="onPositionDeviseChange()"></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label id="fPruLabel">PRU (EUR)</label>
+        <input type="text" id="fPru" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label id="fCoursLabel">Cours actuel (EUR)</label>
+        <input type="text" id="fCours" placeholder="0.00">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Secteur <span class="opt">graphique sectoriel</span></label>
+        <input type="text" id="fSecteur" placeholder="ex : Technologie" list="fSecteurList">
+        <datalist id="fSecteurList"></datalist>
+      </div>
+      <div class="form-group">
+        <label>Zone géographique <span class="opt">optionnel</span></label>
+        <input type="text" id="fZone" placeholder="ex : Europe" list="fZoneList">
+        <datalist id="fZoneList"></datalist>
+      </div>
+    </div>
+    <div class="hint-box">
+      💡 <strong>Ticker Yahoo Finance</strong> : cherchez la valeur sur
+      <a href="https://finance.yahoo.com" target="_blank" rel="noopener">finance.yahoo.com</a> et reprenez
+      le symbole affiché — <code>AI.PA</code> (Air Liquide), <code>MSFT</code> (Microsoft),
+      <code>BTC-EUR</code> (Bitcoin), <code>GC=F</code> (once d'or).
+      Sans ticker, le cours reste celui que vous saisissez ici.
+    </div>
+    <div class="form-error" id="positionError"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn primary" onclick="savePosition()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE DIVIDENDE -->
+<div class="overlay" id="divModal">
+  <div class="modal">
+    <h2 id="divModalTitle">Ajouter un dividende</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Date de versement</label>
+        <input type="date" id="dDate">
+      </div>
+      <div class="form-group">
+        <label>Compte</label>
+        <select id="dCompte" onchange="onDividendeAccountChange()"></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group full">
+        <label>Position (valeur)</label>
+        <input type="text" id="dNom" placeholder="ex : Air Liquide" list="dNomList">
+        <datalist id="dNomList"></datalist>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Montant brut (€)</label>
+        <input type="text" id="dMontant" placeholder="0,00">
+      </div>
+      <div class="form-group">
+        <label>Montant net (€) <span class="opt">optionnel</span></label>
+        <input type="text" id="dMontantNet" placeholder="après fiscalité">
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label>Note <span class="opt">optionnel</span></label>
+      <input type="text" id="dNote" placeholder="ex : acompte 2026">
+    </div>
+    <div class="hint-box" id="divFiscHint"></div>
+    <div class="form-error" id="dividendeError"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeDivModal()">Annuler</button>
+      <button class="btn primary" onclick="saveDividende()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
