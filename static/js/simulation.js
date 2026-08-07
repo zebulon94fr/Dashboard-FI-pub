@@ -1,5 +1,5 @@
 import { totalPortefeuille, investiPortefeuille } from './state.js';
-import { fmt, fmtN, fmtP, cls, kpiCard, makeChart } from './core.js';
+import { fmt, fmtP, cls, kpiCard, makeChart, fmtChart } from './core.js';
 import { chartColors } from './theme.js';
 
 export function setSimReturn(valeur) {
@@ -68,11 +68,11 @@ export function simUpdate() {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { position: 'bottom', labels: { color: chartColors().muted, boxWidth: 14, usePointStyle: true, pointStyle: 'line' } },
-        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label} : ${fmtN(ctx.raw)} €` } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label} : ${fmtChart(ctx.raw)}` } },
       },
       scales: {
         x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, maxTicksLimit: 10 } },
-        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, callback: v => v >= 1e6 ? +(v / 1e6).toFixed(2) + 'M €' : fmtN(v) + '€' } },
+        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, callback: fmtChart } },
       },
     },
   });

@@ -1,6 +1,6 @@
 import { Store, typeInfo, comptes, compteById } from './state.js';
 import { api } from './api.js';
-import { fmt, esc, kpiCard, badgeType, destroyChart, makeChart, parseNum } from './core.js';
+import { fmt, esc, kpiCard, badgeType, destroyChart, makeChart, parseNum, fmtChart } from './core.js';
 import { chartColors } from './theme.js';
 
 let dividendeEnEdition = null;
@@ -136,7 +136,7 @@ export async function loadDividendes() {
         plugins: { legend: { display: false } },
         scales: {
           x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, maxRotation: 45 } },
-          y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, callback: v => v + ' €' } },
+          y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, callback: fmtChart } },
         },
       },
     });
@@ -160,7 +160,7 @@ export async function loadDividendes() {
         plugins: { legend: { position: 'bottom', labels: { color: chartColors().muted, boxWidth: 12 } } },
         scales: {
           x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted } },
-          y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, callback: v => v + ' €' } },
+          y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, callback: fmtChart } },
         },
       },
     });

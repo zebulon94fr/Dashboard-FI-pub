@@ -92,6 +92,13 @@ export const fmt = v => {
 export const fmtN = v => v == null ? '—'
   : new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
 
+/** Montant affiché dans un graphique (axe ou infobulle) : suit le bouton « masquer ». */
+export const fmtChart = v => {
+  if (v == null) return '—';
+  if (Store.amountsHidden) return '•••';
+  return v >= 1e6 ? `${+(v / 1e6).toFixed(2)} M €` : `${fmtN(v)} €`;
+};
+
 export const fmtP = v => v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(2) + '%';
 
 export const cls = v => v > 0 ? 'pos' : v < 0 ? 'neg' : 'neu';

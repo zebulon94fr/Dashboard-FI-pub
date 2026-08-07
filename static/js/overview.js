@@ -1,6 +1,6 @@
 import { typeInfo, comptes, toutesPositions, totalPortefeuille, investiPortefeuille } from './state.js';
 import { chartColors } from './theme.js';
-import { fmt, fmtN, fmtP, cls, kpiCard, destroyChart, makeChart } from './core.js';
+import { fmt, fmtP, cls, kpiCard, destroyChart, makeChart, fmtChart } from './core.js';
 import { couleursComptes, couleurIndex, alpha } from './colors.js';
 
 const ID_CHARTS = ['chartAlloc', 'chartType', 'chartPerf', 'chartTop10', 'chartSecteur', 'chartGeo'];
@@ -52,7 +52,7 @@ export function renderOverview() {
         callbacks: {
           label: ctx => {
             const somme = ctx.dataset.data.reduce((a, b) => a + b, 0);
-            return ` ${fmtN(ctx.raw)} € (${somme ? (ctx.raw / somme * 100).toFixed(1) : 0} %)`;
+            return ` ${fmtChart(ctx.raw)} (${somme ? (ctx.raw / somme * 100).toFixed(1) : 0} %)`;
           },
         },
       },
@@ -128,10 +128,10 @@ export function renderOverview() {
       responsive: true, maintainAspectRatio: false, indexAxis: 'y',
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: ctx => ` ${fmtN(ctx.raw)} € — ${top[ctx.dataIndex]._compte.nom}` } },
+        tooltip: { callbacks: { label: ctx => ` ${fmtChart(ctx.raw)} — ${top[ctx.dataIndex]._compte.nom}` } },
       },
       scales: {
-        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, callback: v => fmtN(v) + '€' } },
+        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, callback: fmtChart } },
         y: { grid: { display: false }, ticks: { color: chartColors().muted, font: { size: 11 } } },
       },
     },

@@ -1,6 +1,6 @@
 import { Store, comptes } from './state.js';
 import { api } from './api.js';
-import { fmtN, esc, destroyChart, makeChart, messageCanvas } from './core.js';
+import { fmtN, esc, destroyChart, makeChart, messageCanvas, fmtChart } from './core.js';
 import { chartColors } from './theme.js';
 import { couleursComptes, couleurIndex } from './colors.js';
 
@@ -90,11 +90,11 @@ export function renderHistory() {
     interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: { position: 'bottom', labels: { color: chartColors().muted, boxWidth: 12, pointStyle: 'line', usePointStyle: true } },
-      tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label} : ${fmtN(ctx.raw)} €` } },
+      tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label} : ${fmtChart(ctx.raw)}` } },
     },
     scales: {
       x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, maxTicksLimit: 8 } },
-      y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, callback: v => fmtN(v) + '€' } },
+      y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, callback: fmtChart } },
     },
   };
 
