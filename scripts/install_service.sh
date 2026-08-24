@@ -30,17 +30,46 @@ titre() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 info()  { printf '  %s\n' "$*"; }
 alerte(){ printf '  \033[33m⚠ %s\033[0m\n' "$*"; }
 
+# useradd et consorts vivent dans sbin, qui n'est pas toujours dans le PATH
+# selon la manière dont on est devenu root (« su » sans tiret, conteneur minimal…).
+PATH="/usr/local/sbin:/usr/sbin:/sbin:$PATH"
+
 [[ $EUID -eq 0 ]] || { echo "À lancer avec sudo : sudo $0" >&2; exit 1; }
-command -v systemctl >/dev/null || { echo "systemd est requis (systemctl introuvable)." >&2; exit 1; }
+if [[ ! -d /run/systemd/system ]]; then
+  echo "Ce système n'a pas démarré avec systemd (/run/systemd/system absent)." >&2
+  echo "C'est le cas dans un conteneur Docker classique : lancez plutôt le serveur" >&2
+  echo "directement avec ./scripts/run_server.sh, ou utilisez un hôte avec systemd." >&2
+  exit 1
+fi
 
 # ── 1. Utilisateur dédié ────────────────────────────────────────────────────
 titre "Utilisateur système"
 if id -u "$UTILISATEUR" >/dev/null 2>&1; then
   info "« $UTILISATEUR » existe déjà."
 else
-  useradd --system --home-dir "$RACINE" --shell /usr/sbin/nologin "$UTILISATEUR"
+  # Le chemin de nologin varie selon la distribution.
+  SHELL_SERVICE=""
+  for candidat in /usr/sbin/nologin /sbin/nologin /bin/false; do
+    [[ -x "$candidat" ]] && { SHELL_SERVICE="$candidat"; break; }
+  done
+
+  if command -v useradd >/dev/null; then
+    useradd --system --home-dir "$RACINE" --shell "${SHELL_SERVICE:-/bin/false}" "$UTILISATEUR"
+  elif command -v adduser >/dev/null; then
+    adduser --system --group --no-create-home --home "$RACINE" \
+            --shell "${SHELL_SERVICE:-/bin/false}" "$UTILISATEUR"
+  else
+    echo "Ni useradd ni adduser n'ont été trouvés." >&2
+    echo "Créez l'utilisateur à la main puis relancez ce script :" >&2
+    echo "  useradd --system --home-dir $RACINE --shell /usr/sbin/nologin $UTILISATEUR" >&2
+    exit 1
+  fi
   info "« $UTILISATEUR » créé."
 fi
+
+# useradd ne crée pas systématiquement le groupe homonyme.
+getent group "$UTILISATEUR" >/dev/null || groupadd --system "$UTILISATEUR" 2>/dev/null || true
+GROUPE="$(id -gn "$UTILISATEUR")"
 
 # ── 2. Environnement Python ─────────────────────────────────────────────────
 titre "Environnement Python"
@@ -48,7 +77,12 @@ if [[ -x "$RACINE/.venv/bin/gunicorn" ]]; then
   info "Environnement virtuel déjà en place."
 else
   command -v python3 >/dev/null || { echo "python3 est requis." >&2; exit 1; }
-  python3 -m venv "$RACINE/.venv"
+  if ! python3 -m venv "$RACINE/.venv" 2>/dev/null; then
+    echo "Création de l'environnement virtuel impossible." >&2
+    echo "Sur Debian/Ubuntu, le module venv est dans un paquet séparé :" >&2
+    echo "  apt install python3-venv" >&2
+    exit 1
+  fi
   "$RACINE/.venv/bin/pip" install --quiet --upgrade pip
   "$RACINE/.venv/bin/pip" install --quiet -r "$RACINE/requirements.txt"
   info "Dépendances installées dans .venv."
@@ -56,10 +90,10 @@ fi
 
 # ── 3. Permissions ──────────────────────────────────────────────────────────
 titre "Permissions"
-chown -R "$UTILISATEUR":"$UTILISATEUR" "$RACINE"
+chown -R "$UTILISATEUR":"$GROUPE" "$RACINE"
 chmod +x "$RACINE"/scripts/*.sh "$RACINE"/scripts/*.py
-install -d -o "$UTILISATEUR" -g "$UTILISATEUR" "$RACINE/backups" "$RACINE/.cache"
-info "Propriétaire : $UTILISATEUR — répertoire : $RACINE"
+install -d -o "$UTILISATEUR" -g "$GROUPE" "$RACINE/backups" "$RACINE/.cache"
+info "Propriétaire : $UTILISATEUR:$GROUPE — répertoire : $RACINE"
 
 # ── 4. Configuration ────────────────────────────────────────────────────────
 titre "Configuration"
@@ -79,7 +113,7 @@ for source in "$RACINE"/deploy/dashboard-fi*.service "$RACINE"/deploy/dashboard-
   cible="$UNITES/$(basename "$source")"
   sed -e "s#/opt/dashboard-fi#$RACINE#g" \
       -e "s#^User=dashboard\$#User=$UTILISATEUR#" \
-      -e "s#^Group=dashboard\$#Group=$UTILISATEUR#" \
+      -e "s#^Group=dashboard\$#Group=$GROUPE#" \
       "$source" > "$cible"
   info "$(basename "$cible")"
 done
@@ -105,7 +139,8 @@ sleep 2
 if systemctl is-active --quiet dashboard-fi.service; then
   port="$(grep -E '^DASHBOARD_PORT=' "$FICHIER_ENV" | cut -d= -f2)"
   schema="$(grep -E '^DASHBOARD_SCHEME=' "$FICHIER_ENV" | cut -d= -f2)"
-  info "Service actif — ${schema:-http}://$(hostname -I | awk '{print $1}'):${port:-8742}"
+  adresse="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  info "Service actif — ${schema:-http}://${adresse:-localhost}:${port:-8742}"
 else
   alerte "Le service n'est pas actif. Diagnostic :"
   info "  journalctl -u dashboard-fi -n 40 --no-pager"
