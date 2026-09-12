@@ -54,6 +54,7 @@ export function openPositionModal(positionId = null) {
   el('fCours').value   = position?.cours ?? '';
   el('fSecteur').value = position?.secteur || '';
   el('fZone').value    = position?.zone || '';
+  el('fTaux').value    = position?.devise && position.devise !== 'EUR' ? position.taux_change : '';
 
   remplirDatalist('fSecteurList', valeursConnues('secteur'));
   remplirDatalist('fZoneList', valeursConnues('zone'));
@@ -83,6 +84,9 @@ export function onPositionDeviseChange() {
   const devise = el('fDevise').value || 'EUR';
   el('fPruLabel').textContent   = `PRU (${devise})`;
   el('fCoursLabel').textContent = `Cours actuel (${devise})`;
+  // Hors zone euro, un taux est indispensable : sans lui la position serait
+  // valorisée comme si la devise était l'euro.
+  el('fTauxRow').hidden = devise === 'EUR';
 }
 
 export function closeModal() { el('posModal').classList.remove('open'); }
@@ -102,6 +106,7 @@ export async function savePosition() {
     pru: parseNum(el('fPru').value),
     cours: parseNum(el('fCours').value),
     devise: el('fDevise').value,
+    taux_change: el('fTaux').value.trim() ? parseNum(el('fTaux').value) : null,
   };
 
   if (!payload.nom) { erreur.textContent = 'Le nom de la position est obligatoire.'; return; }

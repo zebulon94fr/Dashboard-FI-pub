@@ -16,7 +16,11 @@ import {
   openDivModal, closeDivModal, saveDividende, deleteDividende,
   editDividende, loadDividendes, onDividendeAccountChange,
 } from './dividendes.js';
-import { setPeriod, loadBenchmark, renderHistory, toggleBenchmark } from './history.js';
+import {
+  openTxModal, closeTxModal, saveTransaction, editTransaction, deleteTransaction,
+  loadTransactions, onTxAccountChange, onTxTypeChange, onTxDeviseChange,
+} from './transactions.js';
+import { setPeriod, loadBenchmark, renderHistory, toggleBenchmark, setBenchmarkMode } from './history.js';
 import { setSimReturn, simUpdate } from './simulation.js';
 import { showFiscTab, renderFiscalite, calcFisc } from './fiscalite.js';
 import { rbSliderChange, rbSauvegarderCibles, rbCalculer } from './rebalancing.js';
@@ -84,6 +88,7 @@ async function init() {
     Store.TYPES_LIST = referentiel.types || [];
     Store.TYPES = Object.fromEntries(Store.TYPES_LIST.map(t => [t.id, t]));
     Store.DEVISES = referentiel.devises || ['EUR'];
+    Store.TX_TYPES = (await api.getTransactionTypes()).types || [];
   } catch (e) {
     setQuoteStatus('error', 'Serveur injoignable');
     console.error('Référentiel :', e.message);
@@ -128,7 +133,9 @@ Object.assign(window, {
   openPositionModal, closeModal, savePosition, onPositionAccountChange, onPositionDeviseChange,
   openDivModal, closeDivModal, saveDividende, deleteDividende, editDividende,
   loadDividendes, onDividendeAccountChange,
-  setPeriod, loadBenchmark, renderHistory, toggleBenchmark,
+  openTxModal, closeTxModal, saveTransaction, editTransaction, deleteTransaction,
+  loadTransactions, onTxAccountChange, onTxTypeChange, onTxDeviseChange,
+  setPeriod, loadBenchmark, renderHistory, toggleBenchmark, setBenchmarkMode,
   setSimReturn, simUpdate,
   showFiscTab, renderFiscalite, calcFisc,
   rbSliderChange, rbSauvegarderCibles, rbCalculer,

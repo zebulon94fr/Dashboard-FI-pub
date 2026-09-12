@@ -54,8 +54,23 @@ export const api = {
   getTri: (nom, accountId) =>
     json(`${BASE}/api/tri?nom=${encodeURIComponent(nom)}&account_id=${accountId}`),
 
+  // ── Journal des mouvements ──
+  getTransactionTypes: ()  => json(`${BASE}/api/transaction-types`),
+  getTransactions({ account_id, position_id, type, annee } = {}) {
+    const params = new URLSearchParams();
+    for (const [cle, valeur] of Object.entries({ account_id, position_id, type, annee })) {
+      if (valeur) params.set(cle, valeur);
+    }
+    const q = params.toString();
+    return json(`${BASE}/api/transactions${q ? '?' + q : ''}`);
+  },
+  createTransaction: (p)     => post(`${BASE}/api/transactions`, p),
+  updateTransaction: (id, p) => put(`${BASE}/api/transactions/${id}`, p),
+  deleteTransaction: (id)    => json(`${BASE}/api/transactions/${id}`, { method: 'DELETE' }),
+
   // ── Divers ──
   getBenchmark:     (days) => json(`${BASE}/api/benchmark?days=${days}`),
+  getPerformance:   (days) => json(`${BASE}/api/performance?days=${days}`),
   getSettingsKey:   ()     => json(`${BASE}/api/settings/key`),
   saveSettings:     (key)  => post(`${BASE}/api/settings`, { anthropicKey: key }),
   claude:           (p)    => post(`${BASE}/api/claude`, p),

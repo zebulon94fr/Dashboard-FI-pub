@@ -5,6 +5,7 @@ import { renderSidebar, renderComptesPage, renderAccountPage } from './accounts.
 import { renderHistory } from './history.js';
 import { simUpdate } from './simulation.js';
 import { loadDividendes } from './dividendes.js';
+import { loadTransactions } from './transactions.js';
 import { renderFiscalite } from './fiscalite.js';
 import { renderRebalancing } from './rebalancing.js';
 
@@ -34,6 +35,7 @@ export function showTab(tab) {
   if (tab === 'history')     renderHistory();
   if (tab === 'simulation')  simUpdate();
   if (tab === 'dividendes')  loadDividendes();
+  if (tab === 'transactions') loadTransactions();
   if (tab === 'fiscalite')   renderFiscalite();
   if (tab === 'rebalancing') renderRebalancing();
 

@@ -29,15 +29,49 @@ lancement et tout reste sur votre machine.
 |---|---|
 | **Vue d'ensemble** | Patrimoine total, variation 24 h, alertes, calendrier fiscal, répartition par compte et par type d'enveloppe, performance, top 10 des positions, faits marquants, répartition sectorielle et géographique |
 | **Mes comptes** | Création, modification et suppression des comptes ; une page par compte avec le détail des positions |
+| **Mouvements** | Journal des achats, ventes, versements, retraits et frais ; prix moyen pondéré et plus-values réalisées qui en découlent |
 | **Simulation** | Projection patrimoniale (horizon, rendement, versements mensuels, inflation, scénarios haussier/baissier) |
 | **Dividendes** | Saisie des versements, revenus par mois et par année, top positions, TRI (XIRR) par ligne |
-| **Historique** | Évolution du patrimoine total et par compte, comparaison à des indices (CAC 40, MSCI World, S&P 500, Nasdaq 100, MSCI Europe) |
+| **Historique** | Évolution du patrimoine total et par compte, en euros ou en base 100 (TWR), comparée à des indices reconvertis en euros |
 | **Fiscalité** | Règles et simulateur de sortie adaptés au type de chaque compte et à sa date d'ouverture |
 | **Rebalancing** | Allocation cible par compte, écarts, et mouvements d'achat/allègement recommandés |
 | **Arbitrage IA** | Analyse du portefeuille par l'API Anthropic (optionnel, clé requise) |
 
 Également : thème clair/sombre, masquage des montants, export CSV, application installable
 (PWA) utilisable hors ligne, et interface responsive jusqu'au format mobile.
+
+### Journal des mouvements
+
+Le dashboard fonctionne sans journal : on peut saisir une position à la main et suivre sa
+valorisation. Mais trois mesures resteront alors hors d'atteinte, parce qu'une photo du
+portefeuille ne sait pas distinguer un gain d'un apport.
+
+| Mouvement | Porte sur | Effet |
+|---|---|---|
+| **Achat** | une position | Alimente le PMP et fige le prix de revient en euros |
+| **Vente** | une position | Sort une quote-part du prix de revient et constate la plus-value réalisée |
+| **Versement** / **Retrait** | l'enveloppe | Date un flux, sans toucher au prix de revient d'une ligne |
+| **Frais** | l'enveloppe | Date une sortie d'argent |
+
+Dès qu'un achat est enregistré sur une position, sa quantité, son PRU et son prix de revient
+sont recalculés depuis le journal et ne se saisissent plus à la main. Un achat représentant
+déjà l'argent qui entre, ne doublez pas l'écriture avec un versement pour la même somme :
+le versement sert aux enveloppes dont vous ne détaillez pas les lignes.
+
+Ce que le journal débloque :
+
+- **TWR** (rendement pondéré par le temps) — les rendements sont chaînés entre chaque flux,
+  ce qui neutralise les versements. C'est la seule mesure comparable à un indice : sans
+  elle, verser 500 €/mois sur un portefeuille de 50 000 € le fait « battre » un indice
+  stable de 12 % sans qu'aucun actif n'ait progressé. Bascule *Base 100* dans l'Historique.
+- **TRI** (XIRR) — le rendement de l'investisseur, daté sur ses versements réels. Il est
+  désormais refusé plutôt qu'estimé lorsqu'aucun mouvement n'est enregistré.
+- **Plus-value réalisée** — la seule qui soit imposable, séparée de la plus-value latente.
+
+Le prix de revient en euros est **figé au jour de l'achat** et jamais recalculé au taux du
+moment. Sur une ligne en devise, la différence n'est pas anecdotique : 100 titres achetés
+300 $ quand l'euro valait 1,20 $ ont coûté 25 000 €, pas les 28 571 € qu'un recalcul au
+taux du jour ferait apparaître — soit 19 points de performance escamotés.
 
 ### Alertes et calendrier fiscal
 
@@ -134,6 +168,16 @@ Le moteur est identique pour toutes les enveloppes : le cours est récupéré da
 de la position, puis converti en euros au taux du moment. Les valorisations, plus-values et
 totaux sont donc toujours en euros, tandis que cours et PRU restent affichés dans leur
 devise d'origine.
+
+Deux garde-fous s'appliquent à chaque actualisation :
+
+- **Aucune devise n'est valorisée 1:1 par défaut.** Si le taux d'une devise est inconnu, il
+  est cherché sur le marché ; à défaut, l'écriture est refusée avec un message explicite
+  plutôt que de valoriser un dollar comme un euro sans que rien ne le signale.
+- **Les divisions de titres sont détectées.** Un décrochage de plus de 35 % en une
+  actualisation déclenche une vérification auprès de Yahoo : si un split est confirmé, la
+  quantité et le PRU de la position — ainsi que les mouvements de son journal — sont ajustés
+  du ratio exact. Sinon le cours est enregistré tel quel : c'est un vrai mouvement de marché.
 
 Les listes de tickers crypto et métaux sont proposées en autocomplétion, mais n'importe
 quel ticker Yahoo reste utilisable.
@@ -298,8 +342,13 @@ autre client peut donc piloter le dashboard de la même façon.
 | `GET` | `/api/stats` | Agrégats, meilleures et pires positions, variation 24 h, journées extrêmes, cours périmés |
 | `GET` `POST` | `/api/dividendes` | Versements enregistrés |
 | `PUT` `DELETE` | `/api/dividendes/<id>` | Modification et suppression |
-| `GET` | `/api/tri?nom=&account_id=` | TRI d'une position |
-| `GET` | `/api/benchmark?days=` | Indices normalisés sur le capital de départ |
+| `GET` | `/api/transaction-types` | Types de mouvement acceptés par le journal |
+| `GET` `POST` | `/api/transactions` | Journal des mouvements (filtres : compte, position, type, année) |
+| `PUT` `DELETE` | `/api/transactions/<id>` | Modification et suppression, avec recalcul du PMP |
+| `GET` | `/api/plus-values` | Plus-values réalisées reconstituées depuis le journal |
+| `GET` | `/api/performance?days=` | TWR en base 100 et TRI du portefeuille |
+| `GET` | `/api/tri?nom=&account_id=` | TRI d'une position, calculé sur ses flux datés |
+| `GET` | `/api/benchmark?days=` | Indices reconvertis en euros, en base 100 et en valeur |
 | `GET` | `/api/export/csv` | Export du portefeuille |
 | `POST` | `/api/telegram/send` | Envoi du résumé |
 
@@ -315,10 +364,12 @@ Dashboard-FI-pub/
 ├── backend/                # Logique métier
 │   ├── accounts.py            # CRUD des comptes
 │   ├── positions.py           # CRUD des positions, calculs, historique
-│   ├── quotes.py              # Cours et taux de change (yfinance)
+│   ├── transactions.py        # Journal, prix moyen pondéré, plus-values réalisées
+│   ├── performance.py         # Flux datés, TWR et TRI (XIRR)
+│   ├── quotes.py              # Cours, taux de change et divisions de titres (yfinance)
 │   ├── stats.py               # Agrégats
-│   ├── dividendes.py          # Dividendes et TRI
-│   ├── benchmark.py           # Indices de comparaison
+│   ├── dividendes.py          # Dividendes encaissés
+│   ├── benchmark.py           # Indices de comparaison, reconvertis en euros
 │   ├── export.py              # Export CSV
 │   ├── telegram.py            # Résumé Telegram
 │   ├── claude.py              # Appel à l'API Anthropic
@@ -354,9 +405,14 @@ d'enveloppe se fait donc dans `catalog.py`, sans migration.
 
 ```
 accounts ──┬── positions ──── price_history
+           ├── transactions ──── (position_id : achats et ventes)
            ├── dividendes
            └── history_daily / history_intraday   (account_id = 0 : total du portefeuille)
 ```
+
+`transactions` est la source de vérité des positions qui en ont une : `quantite`, `pru` et
+`cout_eur` en sont dérivés à chaque écriture. Une position sans mouvement garde sa saisie
+manuelle, et son prix de revient reste estimé au taux du moment (`cout_eur` à NULL).
 
 ## Vie privée
 

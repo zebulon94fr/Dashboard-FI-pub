@@ -12,7 +12,7 @@ class PositionError(ValueError):
     """Erreur de validation renvoyée telle quelle au client (HTTP 400)."""
 
 
-def _nombre(valeur, defaut=0.0):
+def nombre(valeur, defaut=0.0):
     """Accepte 12.5, « 12,5 » ou « 1 234,56 » — la virgule française comprise."""
     if valeur is None or valeur == "":
         return defaut
@@ -25,8 +25,8 @@ def _nombre(valeur, defaut=0.0):
         return defaut
 
 
-def _taux_connu(db, devise):
-    """Dernier taux de change connu pour cette devise, sinon 1.0."""
+def taux_connu(db, devise):
+    """Dernier taux de change vu en base pour cette devise, ou None."""
     if devise == "EUR":
         return 1.0
     row = db.execute(
@@ -34,14 +34,62 @@ def _taux_connu(db, devise):
         "ORDER BY updated_at DESC LIMIT 1",
         (devise,),
     ).fetchone()
-    return row["taux_change"] if row else 1.0
+    return row["taux_change"] if row else None
 
 
-def calculs(quantite, pru, cours, taux_change):
-    """Valorisation et plus-value latente en euros, performance en décimal."""
+def resoudre_taux(db, devise, taux_fourni=None, date=None):
+    """
+    Taux `devise` -> EUR, dans l'ordre : celui qu'on a saisi, celui du jour de
+    l'opération, le dernier connu en base, puis le marché.
+
+    Faute de taux, une erreur explicite est levée. Retenir 1,0 par défaut
+    valoriserait une position en dollars comme si l'euro et le dollar étaient à
+    parité, en silence et sans que rien ne le signale à l'écran.
+    """
+    if taux_fourni:
+        taux = nombre(taux_fourni)
+        if taux > 0:
+            return taux
+    if devise == "EUR":
+        return 1.0
+
+    # Import tardif : quotes.py dépend de ce module, et yfinance ne doit être
+    # chargé que lorsqu'un taux manque réellement.
+    from backend.quotes import taux_marche
+
+    if date:
+        taux = taux_marche(devise, date)
+        if taux:
+            return taux
+
+    taux = taux_connu(db, devise)
+    if taux:
+        return taux
+
+    taux = taux_marche(devise)
+    if taux:
+        return taux
+
+    raise PositionError(
+        f"Taux de change {devise} vers EUR indisponible"
+        + (f" au {date}" if date else "")
+        + ". Saisissez-le à la main : sans lui, le montant en euros serait faux."
+    )
+
+
+def calculs(quantite, pru, cours, taux_change, cout_eur=None):
+    """
+    Valorisation et plus-value latente en euros, performance en décimal.
+
+    `cout_eur` est le prix de revient réellement supporté, figé au jour de
+    l'achat. Quand il est absent — position saisie à la main, sans journal de
+    mouvements — il est estimé au taux du moment, ce qui masque le gain ou la
+    perte de change sur le capital.
+    """
     valorisation = cours * quantite * taux_change
-    pv_latent = (cours - pru) * quantite * taux_change
-    pv_pct = ((cours - pru) / pru) if pru else 0.0
+    cout = cout_eur if cout_eur is not None else pru * quantite * taux_change
+    pv_latent = valorisation - cout
+    pv_pct = (pv_latent / cout) if cout else 0.0
     return round(valorisation, 2), round(pv_latent, 2), round(pv_pct, 6)
 
 
@@ -61,10 +109,16 @@ def _valide(payload, partiel=False):
 
     for champ in ("quantite", "pru", "cours"):
         if not partiel or champ in payload:
-            out[champ] = _nombre(payload.get(champ))
+            out[champ] = nombre(payload.get(champ))
 
     if not partiel or "devise" in payload:
         out["devise"] = ((payload.get("devise") or "EUR").strip().upper() or "EUR")[:3]
+
+    # Prix de revient réel en euros, facultatif : le journal le renseigne tout
+    # seul, mais on peut le saisir pour une position reprise d'un historique.
+    if "cout_eur" in payload:
+        valeur = payload.get("cout_eur")
+        out["cout_eur"] = nombre(valeur) if valeur not in (None, "") else None
 
     return out
 
@@ -129,18 +183,21 @@ def create_position(account_id, payload):
         compte = db.execute("SELECT id FROM accounts WHERE id=?", (account_id,)).fetchone()
         if not compte:
             raise PositionError("Compte introuvable — créez d'abord un compte.")
-        taux = _taux_connu(db, champs["devise"])
-        valo, pv, pct = calculs(champs["quantite"], champs["pru"], champs["cours"], taux)
+        taux = resoudre_taux(db, champs["devise"], payload.get("taux_change"))
+        # Sans journal de mouvements, le prix de revient reste estimé au taux
+        # du jour : c'est le journal qui le fige (voir transactions.py).
+        cout_eur = champs.get("cout_eur")
+        valo, pv, pct = calculs(champs["quantite"], champs["pru"], champs["cours"], taux, cout_eur)
         cur = db.execute("""
             INSERT INTO positions
               (account_id, nom, ticker, isin, secteur, zone, quantite, pru, cours,
-               devise, taux_change, valorisation, pv_latent, pv_pct)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+               devise, taux_change, cout_eur, valorisation, pv_latent, pv_pct)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             account_id, champs["nom"], champs.get("ticker", ""), champs.get("isin", ""),
             champs.get("secteur", ""), champs.get("zone", ""),
             champs["quantite"], champs["pru"], champs["cours"],
-            champs["devise"], taux, valo, pv, pct,
+            champs["devise"], taux, cout_eur, valo, pv, pct,
         ))
         return cur.lastrowid
 
@@ -153,9 +210,10 @@ def update_position(position_id, payload):
             raise PositionError("Position introuvable.")
 
         fusion = {**dict(actuelle), **champs}
-        taux = (_taux_connu(db, fusion["devise"])
+        taux = (resoudre_taux(db, fusion["devise"], payload.get("taux_change"))
                 if fusion["devise"] != actuelle["devise"] else actuelle["taux_change"])
-        valo, pv, pct = calculs(fusion["quantite"], fusion["pru"], fusion["cours"], taux)
+        cout_eur = fusion.get("cout_eur")
+        valo, pv, pct = calculs(fusion["quantite"], fusion["pru"], fusion["cours"], taux, cout_eur)
 
         db.execute("""
             UPDATE positions SET
@@ -168,6 +226,11 @@ def update_position(position_id, payload):
             fusion["quantite"], fusion["pru"], fusion["cours"],
             fusion["devise"], taux, valo, pv, pct, position_id,
         ))
+
+    # Le journal reste maître : si la position en a un, il réécrit quantité,
+    # PRU et prix de revient par-dessus la saisie manuelle.
+    from backend.transactions import recalc_position
+    recalc_position(position_id)
 
 
 def move_position(position_id, account_id):

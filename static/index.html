@@ -30,6 +30,7 @@
     <div class="nav-submenu" id="comptesSubmenu"></div>
   </div>
 
+  <div class="nav-item" data-tab="transactions" onclick="showTab('transactions')">📒 Mouvements</div>
   <div class="nav-item" data-tab="simulation" onclick="showTab('simulation')">📈 Simulation</div>
   <div class="nav-item" data-tab="dividendes" onclick="showTab('dividendes')">💰 Dividendes</div>
   <div class="nav-item" data-tab="history" onclick="showTab('history')">Historique</div>
@@ -160,7 +161,16 @@
       <span id="bmChecks" style="display:flex;gap:10px;flex-wrap:wrap"></span>
       <button class="period-btn" id="bmLoadBtn" onclick="loadBenchmark()" style="margin-left:4px">⟳ Charger</button>
     </div>
-    <div id="bmStatus" style="font-size:11px;color:var(--muted);margin-bottom:8px;padding:0 4px"></div>
+    <div class="history-controls">
+      <span style="font-size:12px;color:var(--muted)">Échelle :</span>
+      <button class="period-btn mode-btn active" data-mode="euros"
+              onclick="setBenchmarkMode('euros')">En euros</button>
+      <button class="period-btn mode-btn" data-mode="base100"
+              onclick="setBenchmarkMode('base100')">Base 100 (TWR)</button>
+    </div>
+    <div id="bmModeHint" style="font-size:11px;color:var(--muted);margin-bottom:4px;padding:0 4px"></div>
+    <div id="bmStatus" style="font-size:11px;color:var(--muted);margin-bottom:4px;padding:0 4px"></div>
+    <div id="bmNote" style="font-size:11px;color:var(--yellow);margin-bottom:8px;padding:0 4px;line-height:1.5"></div>
     <div class="chart-box" style="margin-bottom:16px">
       <div class="chart-title">Évolution du patrimoine total vs indices</div>
       <div class="chart-wrap h200"><canvas id="chartHistTotal"></canvas></div>
@@ -254,6 +264,58 @@
   </div>
 
   <!-- DIVIDENDES -->
+  <!-- JOURNAL DES MOUVEMENTS -->
+  <div id="sec-transactions" class="section">
+    <div class="section-header">
+      <div>
+        <div class="section-title">📒 Journal des mouvements</div>
+        <div class="section-subtitle">Achats, ventes et versements datés</div>
+      </div>
+      <button class="btn primary" onclick="openTxModal()">+ Mouvement</button>
+    </div>
+    <div class="intro-box">
+      Le journal est la source de vérité de vos positions : dès qu'un achat y figure, la
+      quantité, le prix moyen pondéré et le prix de revient en euros de la ligne en sont
+      déduits et ne se saisissent plus à la main. Il rend aussi possibles trois calculs
+      qu'une simple photo du portefeuille ne permet pas : le <strong>TWR</strong>, qui
+      compare votre gestion à un indice sans confondre performance et épargne, le
+      <strong>TRI</strong>, daté sur vos versements réels, et la
+      <strong>plus-value réalisée</strong>, la seule qui soit imposable.
+    </div>
+
+    <div class="cards" id="txCards" style="margin-bottom:16px"></div>
+
+    <div class="chart-box" style="margin-bottom:16px">
+      <div class="chart-title">Plus-values réalisées</div>
+      <table id="txPlusValues" style="width:100%;font-size:13px;border-collapse:collapse"></table>
+    </div>
+
+    <div class="chart-box">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap">
+        <div class="chart-title" style="margin-bottom:0">Mouvements enregistrés</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="txFilterAnnee" onchange="loadTransactions()" style="width:120px;padding:4px 8px;font-size:12px">
+            <option value="">Toutes années</option>
+          </select>
+          <select id="txFilterType" onchange="loadTransactions()" style="width:130px;padding:4px 8px;font-size:12px">
+            <option value="">Tous les types</option>
+            <option value="achat">Achat</option>
+            <option value="vente">Vente</option>
+            <option value="versement">Versement</option>
+            <option value="retrait">Retrait</option>
+            <option value="frais">Frais</option>
+          </select>
+          <select id="txFilterCompte" onchange="loadTransactions()" style="width:160px;padding:4px 8px;font-size:12px">
+            <option value="">Tous les comptes</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="txTable" style="width:100%;font-size:13px;border-collapse:collapse"></table>
+      </div>
+    </div>
+  </div>
+
   <div id="sec-dividendes" class="section">
     <div class="section-header">
       <div class="section-title">💰 Dividendes & revenus</div>
@@ -511,6 +573,12 @@
         <input type="text" id="fCours" placeholder="0.00">
       </div>
     </div>
+    <div class="form-row" id="fTauxRow" hidden>
+      <div class="form-group full">
+        <label>Taux vers l'euro <span class="opt">laissez vide pour le cours du marché</span></label>
+        <input type="text" id="fTaux" placeholder="ex : 0,92 pour 1 USD = 0,92 EUR">
+      </div>
+    </div>
     <div class="form-row">
       <div class="form-group">
         <label>Secteur <span class="opt">graphique sectoriel</span></label>
@@ -578,6 +646,85 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeDivModal()">Annuler</button>
       <button class="btn primary" onclick="saveDividende()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE MOUVEMENT -->
+<div class="overlay" id="txModal">
+  <div class="modal">
+    <h2 id="txModalTitle">Enregistrer un mouvement</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Date de l'opération</label>
+        <input type="date" id="txDate">
+      </div>
+      <div class="form-group">
+        <label>Compte</label>
+        <select id="txCompte" onchange="onTxAccountChange()"></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group full">
+        <label>Type de mouvement</label>
+        <select id="txType" onchange="onTxTypeChange()"></select>
+      </div>
+    </div>
+
+    <div id="txChampsLigne">
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Position concernée</label>
+          <select id="txPosition"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Quantité</label>
+          <input type="text" id="txQuantite" placeholder="ex : 10">
+        </div>
+        <div class="form-group">
+          <label>Prix unitaire</label>
+          <input type="text" id="txPrix" placeholder="dans la devise de la ligne">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Devise</label>
+          <select id="txDevise" onchange="onTxDeviseChange()"></select>
+        </div>
+        <div class="form-group" id="txTauxGroup" hidden>
+          <label>Taux vers l'euro <span class="opt">optionnel</span></label>
+          <input type="text" id="txTaux" placeholder="cours du jour si vide">
+        </div>
+      </div>
+    </div>
+
+    <div id="txChampsMontant" hidden>
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Montant (€)</label>
+          <input type="text" id="txMontant" placeholder="0,00">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Frais (€) <span class="opt">optionnel</span></label>
+        <input type="text" id="txFrais" placeholder="courtage, commission">
+      </div>
+      <div class="form-group">
+        <label>Note <span class="opt">optionnel</span></label>
+        <input type="text" id="txNote" placeholder="ex : renforcement">
+      </div>
+    </div>
+
+    <div class="hint-box" id="txHint"></div>
+    <div class="form-error" id="txError"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeTxModal()">Annuler</button>
+      <button class="btn primary" id="txSaveBtn" onclick="saveTransaction()">Enregistrer</button>
     </div>
   </div>
 </div>

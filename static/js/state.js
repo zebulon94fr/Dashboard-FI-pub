@@ -5,6 +5,7 @@ export const Store = {
   STATS: null,      // dernier /api/stats — null tant qu'il n'a pas répondu
   TYPES: {},        // catalogue des types d'enveloppes, indexé par id
   TYPES_LIST: [],   // même catalogue, dans l'ordre d'affichage
+  TX_TYPES: [],     // types de mouvement du journal (catalog.py)
   DEVISES: ['EUR'],
   dividendes: [],   // dernier chargement de /api/dividendes (édition en place)
   charts: {},

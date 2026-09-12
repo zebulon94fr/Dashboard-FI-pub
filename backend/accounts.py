@@ -62,25 +62,46 @@ def _valide(payload, partiel=False):
 
 
 def list_accounts():
-    """Comptes avec leurs agrégats (valorisation, investi, +/- latent)."""
+    """
+    Comptes avec leurs agrégats (valorisation, investi, +/- latent, réalisé).
+
+    `investi` retient le prix de revient figé au jour de l'achat dès qu'il est
+    connu. Le recalculer au taux du moment, comme avant, faisait disparaître le
+    gain de change sur le capital des positions en devise.
+    """
     with get_db() as db:
         rows = db.execute("""
             SELECT a.*,
-                   COUNT(p.id)                                       nb_positions,
-                   COALESCE(SUM(p.valorisation), 0)                  valorisation,
-                   COALESCE(SUM(p.pru * p.quantite * p.taux_change), 0) investi,
-                   COALESCE(SUM(p.pv_latent), 0)                     pv_latent
+                   COUNT(p.id)                      nb_positions,
+                   COALESCE(SUM(p.valorisation), 0) valorisation,
+                   COALESCE(SUM(COALESCE(p.cout_eur, p.pru * p.quantite * p.taux_change)), 0) investi,
+                   COALESCE(SUM(p.pv_latent), 0)    pv_latent,
+                   SUM(CASE WHEN p.cout_eur IS NULL AND p.quantite > 0 THEN 1 ELSE 0 END) nb_cout_estime
             FROM accounts a
             LEFT JOIN positions p ON p.account_id = a.id
             GROUP BY a.id
             ORDER BY a.ordre, a.id
         """).fetchall()
 
+        realise = {
+            r["account_id"]: r["total"] for r in db.execute("""
+                SELECT account_id, ROUND(SUM(montant_eur), 2) total
+                FROM transactions WHERE type = 'vente' GROUP BY account_id
+            """).fetchall()
+        }
+
+    from backend.transactions import plus_values_realisees
+    pv_par_compte = {}
+    for ligne in plus_values_realisees():
+        pv_par_compte[ligne["account_id"]] = pv_par_compte.get(ligne["account_id"], 0) + ligne["pv_realisee"]
+
     comptes = []
     for row in rows:
         c = dict(row)
         c["pv_pct"] = (c["pv_latent"] / c["investi"]) if c["investi"] else 0
         c["type_label"] = ACCOUNT_TYPES.get(c["type"], {}).get("label", c["type"])
+        c["pv_realisee"] = round(pv_par_compte.get(c["id"], 0), 2)
+        c["produit_ventes"] = realise.get(c["id"], 0) or 0
         comptes.append(c)
     return comptes
 

@@ -1,4 +1,4 @@
-"""CRUD des dividendes et calcul du TRI (XIRR) par position."""
+"""CRUD des dividendes et revenus encaissés."""
 import datetime
 
 from backend.db import get_db
@@ -133,57 +133,5 @@ def delete_dividende(dividende_id):
             raise DividendeError("Dividende introuvable.")
 
 
-def compute_tri(nom, account_id):
-    """
-    TRI (taux de rendement interne) d'une position :
-    flux = [-investissement initial, +dividendes perçus, +valeur actuelle].
-    Résolution par Newton-Raphson sur les flux datés (XIRR simplifié).
-    """
-    with get_db() as db:
-        pos = db.execute(
-            "SELECT pru, quantite, valorisation, taux_change FROM positions "
-            "WHERE nom=? AND account_id=?",
-            (nom, account_id),
-        ).fetchone()
-        divs = db.execute(
-            "SELECT date, montant FROM dividendes WHERE nom=? AND account_id=? ORDER BY date ASC",
-            (nom, account_id),
-        ).fetchall()
-
-    if not pos or not pos["pru"] or not pos["quantite"]:
-        return None
-
-    investi = pos["pru"] * pos["quantite"] * (pos["taux_change"] or 1.0)
-    valeur = pos["valorisation"]
-    aujourdhui = datetime.date.today()
-
-    if divs:
-        date_investissement = datetime.date.fromisoformat(divs[0]["date"]) - datetime.timedelta(days=1)
-    else:
-        date_investissement = aujourdhui - datetime.timedelta(days=365)
-
-    flux = [(date_investissement, -investi)]
-    flux += [(datetime.date.fromisoformat(d["date"]), d["montant"]) for d in divs]
-    flux.append((aujourdhui, valeur))
-
-    def xnpv(taux, flux):
-        t0 = flux[0][0]
-        return sum(montant / (1 + taux) ** ((date - t0).days / 365.0) for date, montant in flux)
-
-    def xirr(flux, depart=0.1):
-        taux = depart
-        for _ in range(200):
-            npv = xnpv(taux, flux)
-            derivee = (xnpv(taux + 1e-6, flux) - npv) / 1e-6
-            if abs(derivee) < 1e-12:
-                break
-            suivant = taux - npv / derivee
-            if abs(suivant - taux) < 1e-8:
-                return suivant
-            taux = suivant
-        return taux
-
-    try:
-        return round(xirr(flux) * 100, 2)
-    except Exception:
-        return None
+# Le TRI vit désormais dans performance.py : il se calcule sur les flux datés du
+# journal des mouvements, et non plus sur une date d'achat reconstituée.

@@ -10,9 +10,11 @@ from routes.quotes import bp as quotes_bp
 from routes.settings import bp as settings_bp
 from routes.stats import bp as stats_bp
 from routes.telegram import bp as telegram_bp
+from routes.transactions import bp as transactions_bp
 
 
 def register_blueprints(app):
     for bp in (accounts_bp, positions_bp, data_bp, stats_bp, dividendes_bp,
-               quotes_bp, benchmark_bp, settings_bp, claude_bp, export_bp, telegram_bp):
+               quotes_bp, benchmark_bp, settings_bp, claude_bp, export_bp,
+               telegram_bp, transactions_bp):
         app.register_blueprint(bp)

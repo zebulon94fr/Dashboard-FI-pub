@@ -196,6 +196,22 @@ ACCOUNT_TYPES = {
 
 ORDRE_TYPES = ["pea", "cto", "per", "av", "metaux", "crypto"]
 
+# ── Types de mouvement du journal ───────────────────────────────────────────
+# `sens` est le signe du flux du point de vue du portefeuille : +1 quand de
+# l'argent y entre, -1 quand il en sort. C'est ce signe qui neutralise les
+# apports dans le TWR et qui date les flux du TRI (voir backend/performance.py).
+# `ligne` indique si le mouvement porte sur une position précise (achat, vente)
+# ou sur l'enveloppe entière (versement, retrait, frais).
+TYPES_TRANSACTION = {
+    "achat":     {"label": "Achat",     "icone": "🟢", "sens": 1,  "ligne": True},
+    "vente":     {"label": "Vente",     "icone": "🔴", "sens": -1, "ligne": True},
+    "versement": {"label": "Versement", "icone": "⬇",  "sens": 1,  "ligne": False},
+    "retrait":   {"label": "Retrait",   "icone": "⬆",  "sens": -1, "ligne": False},
+    "frais":     {"label": "Frais",     "icone": "✂",  "sens": -1, "ligne": False},
+}
+
+ORDRE_TRANSACTIONS = ["achat", "vente", "versement", "retrait", "frais"]
+
 # ── Catalogues de tickers Yahoo Finance ─────────────────────────────────────
 # Proposés en autocomplétion à la saisie d'une position ; l'utilisateur reste
 # libre de saisir n'importe quel autre ticker.
@@ -229,12 +245,22 @@ METAL_CATALOG = [
 DEVISES = ["EUR", "USD", "GBP", "CHF", "CAD", "JPY", "HKD", "AUD", "SEK", "NOK", "DKK", "SGD"]
 
 # Indices de comparaison de l'onglet Historique.
+#
+# `devise` est indispensable : un indice coté en dollars comparé tel quel à un
+# portefeuille en euros se trompe exactement de la variation EUR/USD de la
+# période. Chaque série est donc reconvertie en euros avant comparaison.
+#
+# `rendement` distingue un indice **prix** (dividendes exclus) d'une série à
+# **rendement total**. Se comparer à un indice prix revient à s'offrir les
+# dividendes gratuitement : c'est signalé à l'écran. Pour passer un indice en
+# rendement total, remplacer son ticker par celui d'un ETF capitalisant coté en
+# euros — rien d'autre à changer ici.
 BENCHMARK_TICKERS = {
-    "CAC 40":     "^FCHI",
-    "MSCI World": "URTH",
-    "S&P 500":    "^GSPC",
-    "Nasdaq 100": "^NDX",
-    "MSCI Europe": "IMEU.L",
+    "CAC 40":            {"ticker": "^FCHI",  "devise": "EUR", "rendement": "prix"},
+    "S&P 500":           {"ticker": "^GSPC",  "devise": "USD", "rendement": "prix"},
+    "Nasdaq 100":        {"ticker": "^NDX",   "devise": "USD", "rendement": "prix"},
+    "MSCI World":        {"ticker": "URTH",   "devise": "USD", "rendement": "total"},
+    "STOXX Europe 600":  {"ticker": "^STOXX", "devise": "EUR", "rendement": "prix"},
 }
 
 
@@ -261,3 +287,8 @@ def public_types():
             t["suggestions"] = []
         out.append(t)
     return out
+
+
+def public_transaction_types():
+    """Types de mouvement envoyés au frontend, dans l'ordre d'affichage."""
+    return [{"id": tid, **TYPES_TRANSACTION[tid]} for tid in ORDRE_TRANSACTIONS]
