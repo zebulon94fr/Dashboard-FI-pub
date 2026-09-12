@@ -62,18 +62,31 @@ def get_stats():
                ORDER BY ts DESC LIMIT 1) prev_total
         """).fetchone()
 
-        best_day = db.execute("""
-            SELECT date, valorisation total,
-                   valorisation - LAG(valorisation) OVER (ORDER BY date) delta
-            FROM history_daily WHERE account_id = 0
-            ORDER BY delta DESC LIMIT 1
-        """).fetchone()
-        worst_day = db.execute("""
-            SELECT date, valorisation total,
-                   valorisation - LAG(valorisation) OVER (ORDER BY date) delta
-            FROM history_daily WHERE account_id = 0
-            ORDER BY delta ASC LIMIT 1
-        """).fetchone()
+        # La première journée de l'historique n'a pas de veille : son delta est
+        # NULL et doit être écarté avant le tri, sans quoi SQLite — qui classe
+        # NULL avant tout le reste — la renverrait comme « pire journée ».
+        variations_jour = """
+            SELECT date, total, delta FROM (
+                SELECT date, valorisation total,
+                       valorisation - LAG(valorisation) OVER (ORDER BY date) delta
+                FROM history_daily WHERE account_id = 0
+            ) WHERE delta IS NOT NULL
+        """
+        best_day = db.execute(f"{variations_jour} ORDER BY delta DESC LIMIT 1").fetchone()
+        worst_day = db.execute(f"{variations_jour} ORDER BY delta ASC LIMIT 1").fetchone()
+
+        # Positions dont le cours n'a jamais été récupéré ou ne l'est plus :
+        # price_history n'est alimentée que lorsque le ticker a bien répondu.
+        stale = db.execute("""
+            SELECT p.nom, a.nom compte, MAX(ph.ts) dernier_cours
+            FROM positions p
+            JOIN accounts a ON a.id = p.account_id
+            LEFT JOIN price_history ph ON ph.position_id = p.id
+            WHERE TRIM(p.ticker) <> ''
+            GROUP BY p.id
+            HAVING dernier_cours IS NULL OR dernier_cours < datetime('now','-5 days')
+            ORDER BY dernier_cours IS NOT NULL, dernier_cours ASC, p.nom
+        """).fetchall()
 
         snap_count = db.execute(
             "SELECT COUNT(*) n FROM history_intraday WHERE account_id = 0"
@@ -107,5 +120,6 @@ def get_stats():
         "var24h_pct": var24h_pct,
         "best_day": dict(best_day) if best_day else None,
         "worst_day": dict(worst_day) if worst_day else None,
+        "stale": [dict(r) for r in stale],
         "snap_count": snap_count["n"] if snap_count else 0,
     }

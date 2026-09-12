@@ -3,7 +3,7 @@
 import { Store, comptes } from './state.js';
 import { api } from './api.js';
 import { initTheme, toggleTheme } from './theme.js';
-import { showTab, showAccount, render, reload, toggleHide, toggleComptesMenu, toggleSidebar } from './core.js';
+import { showTab, showAccount, render, reload, fetchStats, toggleHide, toggleComptesMenu, toggleSidebar } from './core.js';
 import {
   openAccountModal, closeAccountModal, saveAccount, selectAccountType,
   editCurrentAccount, deleteCurrentAccount, delPos,
@@ -104,6 +104,7 @@ async function init() {
 
   try {
     Store.DATA = await api.getData();
+    Store.STATS = await fetchStats();
   } catch (e) {
     setQuoteStatus('error', 'Serveur injoignable');
   }

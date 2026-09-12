@@ -1,7 +1,8 @@
-import { typeInfo, comptes, toutesPositions, totalPortefeuille, investiPortefeuille } from './state.js';
+import { Store, typeInfo, comptes, toutesPositions, totalPortefeuille, investiPortefeuille } from './state.js';
 import { chartColors } from './theme.js';
 import { fmt, fmtP, cls, kpiCard, destroyChart, makeChart, fmtChart } from './core.js';
 import { couleursComptes, couleurIndex, alpha } from './colors.js';
+import { renderAlertes, renderCalendrier, renderFaits, clearAlertes } from './alertes.js';
 
 const ID_CHARTS = ['chartAlloc', 'chartType', 'chartPerf', 'chartTop10', 'chartSecteur', 'chartGeo'];
 
@@ -12,6 +13,7 @@ export function renderOverview() {
 
   if (!liste.length) {
     ID_CHARTS.forEach(destroyChart);
+    clearAlertes();
     corps.style.display = 'none';
     vide.innerHTML = `<div class="empty-state">
       <div class="empty-state-icon">📊</div>
@@ -36,11 +38,21 @@ export function renderOverview() {
   const couleurs = couleursComptes(liste);
 
   // ── KPIs ────────────────────────────────────────────────────
+  const var24h = Store.STATS?.var24h;
+
   document.getElementById('overviewCards').innerHTML =
     kpiCard('Patrimoine total', fmt(total), fmtP(pvGlobal), cls(pvGlobal)) +
+    (var24h != null
+      ? kpiCard('Variation 24 h', fmt(var24h), fmtP(Store.STATS.var24h_pct), cls(var24h))
+      : '') +
     kpiCard('Investi', fmt(investi), `${liste.length} compte${liste.length > 1 ? 's' : ''}`, 'neu') +
     kpiCard('+/- Latent', fmt(pvLatent), fmtP(pvGlobal), cls(pvLatent)) +
     liste.map(c => kpiCard(c.nom, fmt(c.valorisation), fmtP(c.pv_pct), cls(c.pv_pct))).join('');
+
+  // ── Alertes, calendrier fiscal et faits marquants ───────────
+  renderAlertes();
+  renderCalendrier();
+  renderFaits();
 
   ID_CHARTS.forEach(destroyChart);
 

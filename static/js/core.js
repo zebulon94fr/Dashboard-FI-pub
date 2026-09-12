@@ -72,9 +72,22 @@ export function render() {
   if (Store.currentAccountId) renderAccountPage();
 }
 
+/**
+ * Agrégats calculés côté serveur (variation 24 h, journées extrêmes, cours
+ * périmés). Jamais bloquant : l'interface reste complète s'ils manquent.
+ */
+export async function fetchStats() {
+  try {
+    return await api.getStats();
+  } catch {
+    return null;
+  }
+}
+
 /** Recharge le portefeuille depuis le serveur puis rafraîchit l'affichage. */
 export async function reload() {
   Store.DATA = await api.getData();
+  Store.STATS = await fetchStats();
   render();
 }
 

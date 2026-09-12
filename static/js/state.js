@@ -2,6 +2,7 @@
 // plutôt que de réassigner des variables globales (contrainte des modules ES).
 export const Store = {
   DATA: { accounts: [], history: [], lastUpdate: '' },
+  STATS: null,      // dernier /api/stats — null tant qu'il n'a pas répondu
   TYPES: {},        // catalogue des types d'enveloppes, indexé par id
   TYPES_LIST: [],   // même catalogue, dans l'ordre d'affichage
   DEVISES: ['EUR'],
