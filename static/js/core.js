@@ -3,7 +3,7 @@ import { api } from './api.js';
 import { renderOverview } from './overview.js';
 import { renderSidebar, renderComptesPage, renderAccountPage } from './accounts.js';
 import { renderHistory } from './history.js';
-import { simUpdate } from './simulation.js';
+import { loadSimulation } from './simulation.js';
 import { loadDividendes } from './dividendes.js';
 import { loadTransactions } from './transactions.js';
 import { loadAnalyse } from './analyse.js';
@@ -34,7 +34,7 @@ export function showTab(tab) {
   if (estCompte) { Store.currentAccountId = Number(tab.slice('compte-'.length)); renderAccountPage(); }
   if (tab === 'comptes')     renderComptesPage();
   if (tab === 'history')     renderHistory();
-  if (tab === 'simulation')  simUpdate();
+  if (tab === 'simulation')  loadSimulation();
   if (tab === 'dividendes')  loadDividendes();
   if (tab === 'transactions') loadTransactions();
   if (tab === 'analyse')     loadAnalyse();

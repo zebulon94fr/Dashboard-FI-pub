@@ -192,9 +192,97 @@ ACCOUNT_TYPES = {
             ["Comptes détenus à l'étranger", "À déclarer (formulaire 3916-bis)", ""],
         ],
     },
+    "liquidites": {
+        "label": "Liquidités",
+        "nom_complet": "Livrets et comptes courants",
+        "icone": "💧",
+        "couleur": "#79c0ff",
+        "unite": "€",
+        "decimales": 2,
+        "devise_defaut": "EUR",
+        "exemple_nom": "Livret A",
+        "exemple_etablissement": "Banque",
+        "seuil_ans": None,
+        "plafond": None,
+        "modele_fiscal": "exonere",
+        "resume_fiscal": (
+            "Les livrets réglementés — Livret A, LDDS, LEP — sont exonérés d'impôt "
+            "sur le revenu comme de prélèvements sociaux. Un compte courant ne "
+            "produit pas d'intérêts. Un livret bancaire ordinaire, en revanche, est "
+            "soumis à la flat tax de 30 % sur les intérêts versés."
+        ),
+        "regles": [
+            ["Livrets réglementés", "Exonérés d'IR et de PS", "pos"],
+            ["Livret bancaire ordinaire", "30 % sur les intérêts", "neg"],
+            ["Disponibilité", "Immédiate", "pos"],
+            ["Rôle", "Épargne de précaution", ""],
+            ["Plafond Livret A", "22 950 €", ""],
+            ["Plafond LDDS", "12 000 €", ""],
+        ],
+    },
+    "immobilier": {
+        "label": "Immobilier",
+        "nom_complet": "Biens immobiliers et parts de SCPI",
+        "icone": "🏠",
+        "couleur": "#d29922",
+        "unite": "parts",
+        "decimales": 4,
+        "devise_defaut": "EUR",
+        "exemple_nom": "Résidence principale",
+        "exemple_etablissement": "Bien détenu en direct, SCPI…",
+        "seuil_ans": 30,
+        "plafond": None,
+        "modele_fiscal": "immobilier",
+        "resume_fiscal": (
+            "La plus-value de cession de la résidence principale est totalement "
+            "exonérée. Pour les autres biens, elle est taxée à 19 % d'impôt sur le "
+            "revenu et 17,2 % de prélèvements sociaux, avec des abattements pour "
+            "durée de détention différents pour chacun : exonération d'IR après "
+            "22 ans, de prélèvements sociaux après 30 ans."
+        ),
+        "regles": [
+            ["Résidence principale", "Plus-value exonérée", "pos"],
+            ["Autres biens — impôt sur le revenu", "19 %", "neg"],
+            ["Autres biens — prélèvements sociaux", "17,2 %", "neg"],
+            ["Exonération d'IR", "Après 22 ans de détention", "pos"],
+            ["Exonération de prélèvements sociaux", "Après 30 ans", "pos"],
+            ["Revenus locatifs", "Barème de l'IR ou micro-foncier", ""],
+        ],
+    },
+    "credit": {
+        "label": "Crédit",
+        "nom_complet": "Emprunt en cours — passif",
+        "icone": "🏦",
+        "couleur": "#f85149",
+        "unite": "€",
+        "decimales": 2,
+        "devise_defaut": "EUR",
+        "exemple_nom": "Crédit immobilier",
+        "exemple_etablissement": "Banque prêteuse",
+        "seuil_ans": None,
+        "plafond": None,
+        "passif": True,
+        "modele_fiscal": "passif",
+        "resume_fiscal": (
+            "Un crédit se déduit du patrimoine : saisissez le capital restant dû "
+            "comme valorisation, et mettez-le à jour au fil des remboursements. "
+            "C'est ce qui sépare le patrimoine brut du patrimoine net — pour un "
+            "ménage qui rembourse sa résidence principale, l'écart est souvent "
+            "l'essentiel du bilan."
+        ),
+        "regles": [
+            ["Effet sur le patrimoine", "Déduit du patrimoine brut", "neg"],
+            ["Valorisation à saisir", "Capital restant dû", ""],
+            ["Intérêts d'emprunt", "Déductibles des revenus fonciers", ""],
+            ["Assurance emprunteur", "À compter dans le coût total", ""],
+        ],
+    },
 }
 
-ORDRE_TYPES = ["pea", "cto", "per", "av", "metaux", "crypto"]
+ORDRE_TYPES = ["pea", "cto", "per", "av", "metaux", "crypto", "liquidites", "immobilier", "credit"]
+
+# Types dont la valorisation se retranche du patrimoine au lieu de s'y ajouter.
+TYPES_PASSIF = {tid for tid, t in ACCOUNT_TYPES.items() if t.get("passif")}
 
 # ── Types de mouvement du journal ───────────────────────────────────────────
 # `sens` est le signe du flux du point de vue du portefeuille : +1 quand de
@@ -238,6 +326,7 @@ ORDRE_CLASSES = ["actions", "obligations", "monetaire", "immobilier", "or", "cry
 CLASSE_PAR_DEFAUT = {
     "pea": "actions", "cto": "actions", "per": "actions",
     "av": "obligations", "metaux": "or", "crypto": "crypto",
+    "liquidites": "monetaire", "immobilier": "immobilier",
 }
 
 # ── Catalogues de tickers Yahoo Finance ─────────────────────────────────────

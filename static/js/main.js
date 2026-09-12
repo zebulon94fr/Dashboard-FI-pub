@@ -21,7 +21,7 @@ import {
   loadTransactions, onTxAccountChange, onTxTypeChange, onTxDeviseChange,
 } from './transactions.js';
 import { setPeriod, loadBenchmark, renderHistory, toggleBenchmark, setBenchmarkMode } from './history.js';
-import { setSimReturn, simUpdate } from './simulation.js';
+import { loadSimulation, saveProfil, onProfilChange, simUpdate } from './simulation.js';
 import { showFiscTab, renderFiscalite, calcFisc } from './fiscalite.js';
 import { rbSliderChange, rbSauvegarderCibles, rbCalculer } from './rebalancing.js';
 import { loadAnalyse, setAnalysePeriod } from './analyse.js';
@@ -139,7 +139,7 @@ Object.assign(window, {
   openTxModal, closeTxModal, saveTransaction, editTransaction, deleteTransaction,
   loadTransactions, onTxAccountChange, onTxTypeChange, onTxDeviseChange,
   setPeriod, loadBenchmark, renderHistory, toggleBenchmark, setBenchmarkMode,
-  setSimReturn, simUpdate,
+  loadSimulation, saveProfil, onProfilChange, simUpdate,
   showFiscTab, renderFiscalite, calcFisc,
   rbSliderChange, rbSauvegarderCibles, rbCalculer,
   loadAnalyse, setAnalysePeriod,

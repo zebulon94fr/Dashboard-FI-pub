@@ -15,7 +15,13 @@ import math
 
 from backend.db import get_db
 from backend.performance import flux_par_date
-from catalog import CLASSES_ACTIFS, ORDRE_CLASSES
+from catalog import CLASSES_ACTIFS, ORDRE_CLASSES, TYPES_PASSIF
+
+# Un crédit n'est pas un actif : il ne pèse ni dans la concentration, ni dans
+# l'exposition aux devises, ni dans l'allocation. Il se déduit du patrimoine
+# (voir backend/fi.py), il ne s'y répartit pas.
+SANS_PASSIF = "a.type NOT IN (%s)" % ",".join("?" * len(TYPES_PASSIF))
+PARAMS_PASSIF = tuple(TYPES_PASSIF)
 
 # 252 séances de bourse par an. Les cryptoactifs cotent en continu : le
 # portefeuille qui en contient est annualisé sur 365 jours (voir _annualisation).
@@ -223,11 +229,12 @@ def concentration():
     seule exposition, ce qu'ils sont en réalité.
     """
     with get_db() as db:
-        positions = db.execute("""
+        positions = db.execute(f"""
             SELECT p.nom, p.groupe, p.valorisation, a.nom compte, a.type compte_type
             FROM positions p JOIN accounts a ON a.id = p.account_id
-            WHERE p.valorisation > 0 ORDER BY p.valorisation DESC
-        """).fetchall()
+            WHERE p.valorisation > 0 AND {SANS_PASSIF}
+            ORDER BY p.valorisation DESC
+        """, PARAMS_PASSIF).fetchall()
 
     total = sum(p["valorisation"] for p in positions)
     if not total:
@@ -292,11 +299,12 @@ def exposition_devises():
     ne sait pas dater.
     """
     with get_db() as db:
-        positions = db.execute("""
-            SELECT nom, devise, quantite, pru, cours, taux_change, cout_eur,
-                   valorisation, pv_latent
-            FROM positions WHERE valorisation > 0
-        """).fetchall()
+        positions = db.execute(f"""
+            SELECT p.nom, p.devise, p.quantite, p.pru, p.cours, p.taux_change,
+                   p.cout_eur, p.valorisation, p.pv_latent
+            FROM positions p JOIN accounts a ON a.id = p.account_id
+            WHERE p.valorisation > 0 AND {SANS_PASSIF}
+        """, PARAMS_PASSIF).fetchall()
 
     total = sum(p["valorisation"] for p in positions)
     if not total:
@@ -366,13 +374,13 @@ def contributions():
     ce qui la rend vérifiable.
     """
     with get_db() as db:
-        positions = db.execute("""
+        positions = db.execute(f"""
             SELECT p.nom, p.classe, p.pv_latent, p.pv_pct, p.valorisation,
                    COALESCE(p.cout_eur, p.pru * p.quantite * p.taux_change) cout,
                    a.nom compte, a.type compte_type
             FROM positions p JOIN accounts a ON a.id = p.account_id
-            WHERE p.quantite > 0
-        """).fetchall()
+            WHERE p.quantite > 0 AND {SANS_PASSIF}
+        """, PARAMS_PASSIF).fetchall()
 
     investi = sum(p["cout"] or 0 for p in positions)
     if not investi:
@@ -407,15 +415,16 @@ def contributions():
 def repartition_classes():
     """Valorisation par classe d'actifs, toutes enveloppes confondues."""
     with get_db() as db:
-        rows = db.execute("""
+        rows = db.execute(f"""
             SELECT COALESCE(NULLIF(p.classe, ''), 'autre') classe,
                    SUM(p.valorisation) valorisation,
                    SUM(COALESCE(p.cout_eur, p.pru * p.quantite * p.taux_change)) investi,
                    SUM(p.pv_latent) pv_latent,
                    COUNT(*) nb_positions
-            FROM positions p WHERE p.valorisation > 0
+            FROM positions p JOIN accounts a ON a.id = p.account_id
+            WHERE p.valorisation > 0 AND {SANS_PASSIF}
             GROUP BY classe
-        """).fetchall()
+        """, PARAMS_PASSIF).fetchall()
         cibles = {r["classe"]: r["cible_pct"]
                   for r in db.execute("SELECT classe, cible_pct FROM allocations_classes")}
 

@@ -78,6 +78,10 @@ export const api = {
   },
   saveCiblesClasses: (cibles) => post(`${BASE}/api/rebalancing/cibles`, { cibles }),
 
+  // ── Indépendance financière ──
+  getFi:            ()  => json(`${BASE}/api/fi`),
+  saveReglages:     (p) => post(`${BASE}/api/fi/reglages`, p),
+
   // ── Divers ──
   getBenchmark:     (days) => json(`${BASE}/api/benchmark?days=${days}`),
   getPerformance:   (days) => json(`${BASE}/api/performance?days=${days}`),

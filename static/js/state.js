@@ -25,12 +25,19 @@ export const comptes = () => Store.DATA.accounts || [];
 
 export const compteById = id => comptes().find(c => c.id === Number(id)) || null;
 
-/** Toutes les positions du portefeuille, chacune enrichie de son compte (`_compte`). */
+/**
+ * Toutes les positions du portefeuille, chacune enrichie de son compte.
+ *
+ * Les comptes de passif en sont exclus : le capital restant dû d'un crédit
+ * n'est pas une ligne du portefeuille, il se déduit du patrimoine.
+ */
 export const toutesPositions = () =>
-  comptes().flatMap(c => (c.positions || []).map(p => ({ ...p, _compte: c })));
+  comptes().filter(c => !c.passif)
+    .flatMap(c => (c.positions || []).map(p => ({ ...p, _compte: c })));
 
+/** Actif brut : le total hors dettes. Le patrimoine net s'en déduit. */
 export const totalPortefeuille = () =>
-  comptes().reduce((s, c) => s + (c.valorisation || 0), 0);
+  comptes().filter(c => !c.passif).reduce((s, c) => s + (c.valorisation || 0), 0);
 
 export const investiPortefeuille = () =>
-  comptes().reduce((s, c) => s + (c.investi || 0), 0);
+  comptes().filter(c => !c.passif).reduce((s, c) => s + (c.investi || 0), 0);

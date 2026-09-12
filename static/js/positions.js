@@ -62,6 +62,7 @@ export function openPositionModal(positionId = null) {
   el('fZone').value    = position?.zone || '';
   el('fTaux').value    = position?.devise && position.devise !== 'EUR' ? position.taux_change : '';
   el('fGroupe').value  = position?.groupe || '';
+  el('fTer').value     = position?.ter || '';
 
   el('fClasse').innerHTML = (Store.CLASSES || [])
     .map(c => `<option value="${c.id}">${esc(c.label)}</option>`).join('');
@@ -136,6 +137,7 @@ export async function savePosition() {
     devise: el('fDevise').value,
     classe: el('fClasse').value,
     groupe: el('fGroupe').value.trim(),
+    ter: parseNum(el('fTer').value),
     taux_change: el('fTaux').value.trim() ? parseNum(el('fTaux').value) : null,
   };
 

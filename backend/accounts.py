@@ -1,10 +1,11 @@
 """CRUD des comptes (enveloppes) créés par l'utilisateur."""
 import datetime
 
-from catalog import ACCOUNT_TYPES, ORDRE_TYPES
+from catalog import ACCOUNT_TYPES, ORDRE_TYPES, TYPES_PASSIF
 from backend.db import get_db
 
-CHAMPS = ("nom", "type", "etablissement", "date_ouverture", "cible_pct", "note", "ordre")
+CHAMPS = ("nom", "type", "etablissement", "date_ouverture", "cible_pct",
+          "frais_pct", "note", "ordre")
 
 
 class AccountError(ValueError):
@@ -51,6 +52,12 @@ def _valide(payload, partiel=False):
         except (TypeError, ValueError):
             raise AccountError("L'allocation cible doit être un nombre.")
         out["cible_pct"] = min(100.0, max(0.0, cible))
+
+    if "frais_pct" in payload:
+        try:
+            out["frais_pct"] = min(10.0, max(0.0, float(payload.get("frais_pct") or 0)))
+        except (TypeError, ValueError):
+            raise AccountError("Les frais de gestion doivent être un nombre.")
 
     if "ordre" in payload:
         try:
@@ -100,6 +107,9 @@ def list_accounts():
         c = dict(row)
         c["pv_pct"] = (c["pv_latent"] / c["investi"]) if c["investi"] else 0
         c["type_label"] = ACCOUNT_TYPES.get(c["type"], {}).get("label", c["type"])
+        # Un crédit porte son capital restant dû en positif : c'est à
+        # l'affichage et au patrimoine net de lui donner son signe.
+        c["passif"] = c["type"] in TYPES_PASSIF
         c["pv_realisee"] = round(pv_par_compte.get(c["id"], 0), 2)
         c["produit_ventes"] = realise.get(c["id"], 0) or 0
         comptes.append(c)

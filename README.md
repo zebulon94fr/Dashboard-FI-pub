@@ -31,7 +31,7 @@ lancement et tout reste sur votre machine.
 | **Mes comptes** | Création, modification et suppression des comptes ; une page par compte avec le détail des positions |
 | **Mouvements** | Journal des achats, ventes, versements, retraits et frais ; prix moyen pondéré et plus-values réalisées qui en découlent |
 | **Analyse** | Volatilité, perte maximale, ratio de Sharpe, concentration et transparisation, exposition aux devises, attribution marché/change et contribution à la performance |
-| **Simulation** | Projection patrimoniale (horizon, rendement, versements mensuels, inflation, scénarios haussier/baissier) |
+| **Indépendance** | Patrimoine net, frais réels, capital-cible, taux de couverture, date d'indépendance, Coast FI, et projection Monte-Carlo avec phase de retraits |
 | **Dividendes** | Saisie des versements, revenus par mois et par année, rendement courant et sur prix de revient, taux de prélèvement effectif, TRI (XIRR) par ligne |
 | **Historique** | Évolution du patrimoine total et par compte, en euros ou en base 100 (TWR), comparée à des indices reconvertis en euros |
 | **Fiscalité** | Règles et simulateur de sortie adaptés au type de chaque compte et à sa date d'ouverture |
@@ -138,6 +138,43 @@ Trois règles encadrent les mouvements proposés :
 Un montant minimum d'ordre évite les micro-arbitrages qui coûtent plus en frais qu'ils ne
 rapportent en alignement.
 
+### Indépendance financière
+
+Le projet s'appelle Dashboard FI et ne mesurait rien de cela : il répondait à « combien
+j'aurai dans vingt ans », jamais à « dans combien de temps puis-je arrêter ». Une seule
+saisie — vos dépenses annuelles visées et votre épargne mensuelle — débloque tout le reste.
+
+| Mesure | Ce qu'elle répond |
+|---|---|
+| **Patrimoine net** | Actif brut moins dettes. Un crédit porte son capital restant dû comme valorisation et se retranche du total |
+| **Capital financier** | Ce qui finance réellement l'indépendance : ni la résidence principale, qui ne produit pas de revenu tant qu'on l'habite, ni les crédits, déjà déduits |
+| **Frais réels** | Frais de gestion de l'enveloppe et TER des supports cumulés, en euros par an et en pourcentage pondéré |
+| **Capital-cible** | Dépenses annuelles divisées par le taux de retrait. 4 % donne le « 25 fois les dépenses » usuel |
+| **Taux de couverture** | Part de vos dépenses que le capital actuel financerait déjà |
+| **Date d'indépendance** | Projetée au rythme d'épargne courant, avec sa sensibilité : ce que 200 €/mois de plus avancent |
+| **Coast FI** | Le capital à partir duquel ne plus rien verser suffit encore à atteindre la cible |
+| **Taux d'épargne** | Le levier dominant sur les dix premières années, bien au-dessus du rendement |
+
+Le taux de retrait de 4 % vient d'études américaines à horizon trente ans, hors fiscalité
+française : un ordre de grandeur, pas une loi. Il est réglable.
+
+### Projection : mille trajectoires plutôt qu'un taux fixe
+
+Composer un rendement annuel constant masque le **risque de séquence** : un rendement moyen
+de 7 % obtenu avec un krach en début de retrait ruine un plan qu'un 7 % linéaire faisait
+tenir. C'est le risque numéro un d'un plan FI, et un modèle déterministe ne peut pas le
+montrer.
+
+La projection tire donc mille trajectoires — cinq mille si vous le demandez — en simulant
+les rendements mois par mois autour du rendement attendu, avec la volatilité saisie. Elle
+affiche la médiane encadrée des déciles, la probabilité d'atteindre le capital-cible, et
+surtout le **taux d'épuisement** : la part des trajectoires où le capital tombe à zéro
+pendant la phase de retraits.
+
+Deux corrections s'y ajoutent : les **frais réellement mesurés** sur vos comptes sont
+déduits du rendement projeté, et les montants sont en euros constants — le rendement saisi
+est net d'inflation.
+
 ### Alertes et calendrier fiscal
 
 La vue d'ensemble signale ce qui demande une décision, à partir des seules données déjà
@@ -169,6 +206,9 @@ devise proposée par défaut et surtout les règles appliquées dans l'onglet Fi
 | **Assurance vie** | parts | 8 ans | Abattement de 4 600 € / 9 200 €, IR réduit à 7,5 %, comparé au régime d'avant 8 ans |
 | **Métaux précieux** | onces | 22 ans | Taxe forfaitaire de 11,5 % comparée au régime des plus-values (36,2 % avec abattement) |
 | **Cryptomonnaies** | unités | — | Flat tax de 30 %, exonération sous 305 € de cessions annuelles |
+| **Liquidités** | € | — | Livrets réglementés exonérés ; flat tax de 30 % sur un livret bancaire ordinaire |
+| **Immobilier** | parts | 30 ans | 19 % d'IR et 17,2 % de PS, deux barèmes d'abattement distincts — exonération d'IR à 22 ans, de PS à 30 ans |
+| **Crédit** | € | — | Passif : le capital restant dû se **déduit** du patrimoine au lieu de s'y ajouter |
 
 Les taux sont regroupés dans [`catalog.py`](catalog.py) — un seul fichier à mettre à jour
 si la législation change. Ces simulations sont indicatives et ne remplacent pas l'avis
@@ -417,6 +457,8 @@ autre client peut donc piloter le dashboard de la même façon.
 | `GET` | `/api/analyse?days=` | Risque, concentration, devises, attribution et contributions |
 | `GET` | `/api/rendements` | Rendements des dividendes, par ligne et globaux |
 | `GET` | `/api/rebalancing?apport=&bande=&ordre_min=` | Écarts par classe et mouvements recommandés |
+| `GET` | `/api/fi` | Patrimoine net, frais réels et métriques d'indépendance |
+| `GET` `POST` | `/api/fi/reglages` | Dépenses, épargne, taux de retrait et horizon |
 | `POST` | `/api/rebalancing/cibles` | Allocation cible par classe d'actifs |
 | `GET` | `/api/tri?nom=&account_id=` | TRI d'une position, calculé sur ses flux datés |
 | `GET` | `/api/benchmark?days=` | Indices reconvertis en euros, en base 100 et en valeur |
@@ -439,6 +481,7 @@ Dashboard-FI-pub/
 │   ├── performance.py         # Flux datés, TWR et TRI (XIRR)
 │   ├── analyse.py             # Risque, concentration, devises, contributions
 │   ├── rebalancing.py         # Allocation cible par classe et ordre d'arbitrage
+│   ├── fi.py                  # Patrimoine net, frais réels, capital-cible et Coast FI
 │   ├── quotes.py              # Cours, taux de change et divisions de titres (yfinance)
 │   ├── stats.py               # Agrégats
 │   ├── dividendes.py          # Dividendes encaissés
@@ -478,6 +521,7 @@ d'enveloppe se fait donc dans `catalog.py`, sans migration.
 
 ```
 allocations_classes            (cible par classe d'actifs, hors enveloppes)
+reglages                       (dépenses, épargne, horizon — le profil d'indépendance)
 
 accounts ──┬── positions ──── price_history
            ├── transactions ──── (position_id : achats et ventes)

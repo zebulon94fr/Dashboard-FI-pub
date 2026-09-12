@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     etablissement  TEXT    DEFAULT '',            -- courtier, banque, assureur, plateforme…
     date_ouverture TEXT    DEFAULT '',            -- YYYY-MM-DD — sert aux règles fiscales
     cible_pct      REAL    DEFAULT 0,             -- allocation cible (onglet Rebalancing)
+    frais_pct      REAL    DEFAULT 0,             -- frais de gestion annuels de l'enveloppe, en %
     note           TEXT    DEFAULT '',
     ordre          INTEGER DEFAULT 0,
     created_at     TEXT    DEFAULT (datetime('now'))
@@ -45,6 +46,7 @@ CREATE TABLE IF NOT EXISTS positions (
     zone         TEXT    DEFAULT '',              -- libre — alimente le graphique géographique
     classe       TEXT    DEFAULT '',              -- classe d'actifs (catalog.CLASSES_ACTIFS)
     groupe       TEXT    DEFAULT '',              -- sous-jacent commun, pour la transparisation
+    ter          REAL    DEFAULT 0,               -- frais courants du support (TER), en %
     quantite     REAL    DEFAULT 0,
     pru          REAL    DEFAULT 0,
     cours        REAL    DEFAULT 0,
@@ -130,6 +132,14 @@ CREATE TABLE IF NOT EXISTS allocations_classes (
     cible_pct  REAL DEFAULT 0
 );
 
+-- ── Réglages du profil ──────────────────────────────────────────────────────
+-- Dépenses, épargne et horizon : ce que le dashboard ne peut pas déduire des
+-- cours, et sans quoi aucune métrique d'indépendance financière n'est calculable.
+CREATE TABLE IF NOT EXISTS reglages (
+    cle    TEXT PRIMARY KEY,
+    valeur TEXT
+);
+
 -- ── Index ───────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_positions_account   ON positions(account_id);
 CREATE INDEX IF NOT EXISTS idx_price_history_pos   ON price_history(position_id, ts);
@@ -147,6 +157,8 @@ MIGRATIONS = [
     ("positions", "cout_eur", "REAL DEFAULT NULL"),
     ("positions", "classe", "TEXT DEFAULT ''"),
     ("positions", "groupe", "TEXT DEFAULT ''"),
+    ("positions", "ter", "REAL DEFAULT 0"),
+    ("accounts", "frais_pct", "REAL DEFAULT 0"),
 ]
 
 

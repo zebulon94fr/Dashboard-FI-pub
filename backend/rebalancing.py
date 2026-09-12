@@ -16,7 +16,7 @@ Trois changements par rapport au rééquilibrage par enveloppe :
     consistait à alléger les plus grosses plus-values, maximisait l'impôt.
 """
 from backend.db import get_db
-from catalog import CLASSES_ACTIFS, ORDRE_CLASSES, PFU
+from catalog import CLASSES_ACTIFS, ORDRE_CLASSES, PFU, TYPES_PASSIF
 
 # Taux d'imposition d'un *arbitrage* interne, enveloppe par enveloppe. Dans une
 # enveloppe capitalisante, réallouer entre supports ne déclenche aucune
@@ -98,13 +98,15 @@ def get_rebalancing(apport=0.0, bande_relative=BANDE_RELATIVE,
                     ordre_minimum=ORDRE_MINIMUM_EUR):
     """Écarts par classe, puis mouvements recommandés apport en tête."""
     with get_db() as db:
-        positions = db.execute("""
+        # Un crédit ne se rééquilibre pas : il est exclu de l'allocation.
+        sans_passif = "a.type NOT IN (%s)" % ",".join("?" * len(TYPES_PASSIF))
+        positions = db.execute(f"""
             SELECT p.id, p.nom, COALESCE(NULLIF(p.classe, ''), 'autre') classe,
                    p.valorisation, p.pv_latent, p.pv_pct,
                    a.nom compte, a.type compte_type
             FROM positions p JOIN accounts a ON a.id = p.account_id
-            WHERE p.valorisation > 0
-        """).fetchall()
+            WHERE p.valorisation > 0 AND {sans_passif}
+        """, tuple(TYPES_PASSIF)).fetchall()
         cibles = {r["classe"]: r["cible_pct"]
                   for r in db.execute("SELECT classe, cible_pct FROM allocations_classes")}
 

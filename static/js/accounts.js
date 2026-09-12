@@ -189,6 +189,7 @@ export function openAccountModal(id = null) {
   document.getElementById('aEtablissement').value = compte?.etablissement || '';
   document.getElementById('aDateOuverture').value = compte?.date_ouverture || '';
   document.getElementById('aCible').value = compte?.cible_pct ? String(compte.cible_pct) : '';
+  document.getElementById('aFrais').value = compte?.frais_pct ? String(compte.frais_pct) : '';
   document.getElementById('aNote').value = compte?.note || '';
 
   document.getElementById('accountModal').classList.add('open');
@@ -249,6 +250,7 @@ export async function saveAccount() {
     etablissement: document.getElementById('aEtablissement').value.trim(),
     date_ouverture: document.getElementById('aDateOuverture').value,
     cible_pct: parseNum(document.getElementById('aCible').value),
+    frais_pct: parseNum(document.getElementById('aFrais').value),
     note: document.getElementById('aNote').value.trim(),
   };
 

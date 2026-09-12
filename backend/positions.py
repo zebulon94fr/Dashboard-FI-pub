@@ -3,10 +3,10 @@ import datetime
 
 from backend.accounts import list_accounts
 from backend.db import get_db
-from catalog import CLASSES_ACTIFS, ORDRE_CLASSES, classe_par_defaut
+from catalog import CLASSES_ACTIFS, ORDRE_CLASSES, TYPES_PASSIF, classe_par_defaut
 
 CHAMPS = ("nom", "ticker", "isin", "secteur", "zone", "classe", "groupe",
-          "quantite", "pru", "cours", "devise")
+          "ter", "quantite", "pru", "cours", "devise")
 
 
 class PositionError(ValueError):
@@ -122,6 +122,10 @@ def _valide(payload, partiel=False):
     if not partiel or "devise" in payload:
         out["devise"] = ((payload.get("devise") or "EUR").strip().upper() or "EUR")[:3]
 
+    # Frais courants du support, en % par an : ils rognent le rendement projeté.
+    if "ter" in payload:
+        out["ter"] = min(10.0, max(0.0, nombre(payload.get("ter"))))
+
     # Prix de revient réel en euros, facultatif : le journal le renseigne tout
     # seul, mais on peut le saisir pour une position reprise d'un historique.
     if "cout_eur" in payload:
@@ -202,14 +206,14 @@ def create_position(account_id, payload):
         valo, pv, pct = calculs(champs["quantite"], champs["pru"], champs["cours"], taux, cout_eur)
         cur = db.execute("""
             INSERT INTO positions
-              (account_id, nom, ticker, isin, secteur, zone, classe, groupe,
+              (account_id, nom, ticker, isin, secteur, zone, classe, groupe, ter,
                quantite, pru, cours, devise, taux_change, cout_eur,
                valorisation, pv_latent, pv_pct)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             account_id, champs["nom"], champs.get("ticker", ""), champs.get("isin", ""),
             champs.get("secteur", ""), champs.get("zone", ""),
-            champs.get("classe", ""), champs.get("groupe", ""),
+            champs.get("classe", ""), champs.get("groupe", ""), champs.get("ter", 0),
             champs["quantite"], champs["pru"], champs["cours"],
             champs["devise"], taux, cout_eur, valo, pv, pct,
         ))
@@ -247,14 +251,14 @@ def update_position(position_id, payload):
 
         db.execute("""
             UPDATE positions SET
-              nom=?, ticker=?, isin=?, secteur=?, zone=?, classe=?, groupe=?,
+              nom=?, ticker=?, isin=?, secteur=?, zone=?, classe=?, groupe=?, ter=?,
               quantite=?, pru=?, cours=?,
               devise=?, taux_change=?, valorisation=?, pv_latent=?, pv_pct=?,
               updated_at=datetime('now')
             WHERE id=?
         """, (
             fusion["nom"], fusion["ticker"], fusion["isin"], fusion["secteur"], fusion["zone"],
-            fusion.get("classe") or "", fusion.get("groupe") or "",
+            fusion.get("classe") or "", fusion.get("groupe") or "", fusion.get("ter") or 0,
             fusion["quantite"], fusion["pru"], fusion["cours"],
             fusion["devise"], taux, valo, pv, pct, position_id,
         ))
@@ -284,20 +288,30 @@ def delete_position(position_id):
 
 
 def record_history(usd_eur=None):
-    """Photographie la valorisation courante : une ligne par compte + le total."""
+    """
+    Photographie la valorisation courante : une ligne par compte + le total.
+
+    Le total (account_id = 0) est l'**actif brut** : un compte de passif porte
+    son capital restant dû en positif, l'ajouter au total ferait grimper le
+    patrimoine à chaque euro emprunté — et fausserait du même coup le TWR, la
+    perte maximale et la comparaison aux indices, tous calculés sur cette série.
+    Les comptes de passif gardent leur propre ligne d'historique.
+    """
     aujourdhui = datetime.date.today().isoformat()
     maintenant = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
     with get_db() as db:
         totaux = db.execute("""
-            SELECT a.id, COALESCE(SUM(p.valorisation), 0) valorisation
+            SELECT a.id, a.type, COALESCE(SUM(p.valorisation), 0) valorisation
             FROM accounts a
             LEFT JOIN positions p ON p.account_id = a.id
             GROUP BY a.id
         """).fetchall()
 
         lignes = [(row["id"], round(row["valorisation"], 2)) for row in totaux]
-        lignes.append((0, round(sum(v for _, v in lignes), 2)))
+        actif_brut = sum(round(row["valorisation"], 2) for row in totaux
+                         if row["type"] not in TYPES_PASSIF)
+        lignes.append((0, round(actif_brut, 2)))
 
         for account_id, valorisation in lignes:
             db.execute("""

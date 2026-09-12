@@ -8,6 +8,7 @@ const AV_IR_REDUIT = 0.075;
 const AV_ABATTEMENT = { seul: 4600, couple: 9200 };
 const CRYPTO_SEUIL_EXONERATION = 305;
 const METAUX_FORFAIT = 0.115, METAUX_PV = 0.362;
+const IMMO_IR = 0.19, IMMO_PS = PS;   // 19 % + 17,2 % sur la plus-value immobilière
 
 let compteSelectionne = null;
 
@@ -29,6 +30,29 @@ function ratioGains(compte) {
   return Math.max(0, (compte.pv_latent || 0) / compte.valorisation);
 }
 
+/**
+ * Abattements immobiliers pour durée de détention — deux barèmes distincts.
+ *
+ * L'impôt sur le revenu s'efface après 22 ans, les prélèvements sociaux
+ * seulement après 30 ans : les confondre ferait croire à une exonération
+ * totale huit ans trop tôt.
+ */
+function abattementsImmobilier(annees) {
+  let ir = 0;
+  if (annees > 5) ir = Math.min(1, (Math.min(annees, 21) - 5) * 0.06 + (annees >= 22 ? 0.04 : 0));
+  if (annees >= 22) ir = 1;
+
+  let ps = 0;
+  if (annees > 5) {
+    ps = Math.min(annees, 21) > 5 ? (Math.min(annees, 21) - 5) * 0.0165 : 0;
+    if (annees >= 22) ps += 0.016;
+    if (annees > 22) ps += (Math.min(annees, 30) - 22) * 0.09;
+  }
+  if (annees >= 30) ps = 1;
+
+  return { ir: Math.min(1, Math.max(0, ir)), ps: Math.min(1, Math.max(0, ps)) };
+}
+
 /** Abattement pour durée de détention des métaux précieux (5 %/an au-delà de 2 ans). */
 function abattementMetaux(annees) {
   return Math.min(1, Math.max(0, (annees - 2) * 0.05));
@@ -43,6 +67,12 @@ export function tauxMarginal(compte) {
     case 'av':     return atteint ? AV_IR_REDUIT + PS : PFU;
     case 'metaux': return METAUX_PV * (1 - abattementMetaux(anciennete(compte) ?? 0));
     case 'per':    return PFU;      // sur la seule quote-part de gains
+    case 'exonere': return 0;       // livrets réglementés
+    case 'passif':  return 0;       // une dette ne produit pas de plus-value
+    case 'immobilier': {
+      const a = abattementsImmobilier(anciennete(compte) ?? 0);
+      return IMMO_IR * (1 - a.ir) + IMMO_PS * (1 - a.ps);
+    }
     default:       return PFU;      // CTO, cryptomonnaies
   }
 }
@@ -189,11 +219,11 @@ function simulateurHtml(compte) {
     </div>`;
   }
 
-  if (t.modele_fiscal === 'metaux') {
+  if (['metaux', 'immobilier'].includes(t.modele_fiscal)) {
     const ans = anciennete(compte);
     champs += `<div class="fisc-slider">
       <label>Durée de détention</label>
-      <input type="range" id="fiscAnnees" min="0" max="25" step="1"
+      <input type="range" id="fiscAnnees" min="0" max="35" step="1"
              value="${Math.round(ans ?? 0)}" oninput="calcFisc()">
       <span id="fiscAnneesVal"></span>
     </div>`;
@@ -226,6 +256,9 @@ export function calcFisc() {
     av:     () => simAV(montant, gain, atteint),
     per:    () => simPER(montant, gain),
     metaux: () => simMetaux(montant, gain, annees),
+    exonere: () => simExonere(montant),
+    passif: () => simPassif(montant),
+    immobilier: () => simImmobilier(montant, gain, annees),
   }[t.modele_fiscal] || (() => simFlat(montant, gain));
 
   sortie.innerHTML = rendu();
@@ -320,6 +353,44 @@ function simPER(montant, gain) {
     montant - irCapital - impotGains, montant) +
     `<div class="fisc-note">Ce calcul suppose que les versements ont été déduits du revenu imposable à l'entrée.
      Si vous y aviez renoncé, seule la quote-part de gains est imposée.</div>`;
+}
+
+function simExonere(montant) {
+  return bloc('Livret réglementé',
+    [['Impôt sur le revenu', 0, 'pos'], ['Prélèvements sociaux', 0, 'pos']],
+    montant, montant) +
+    `<div class="fisc-note pos">✅ Livret A, LDDS et LEP sont exonérés d'impôt comme de
+     prélèvements sociaux. Un livret bancaire ordinaire, lui, subit la flat tax de 30 %
+     sur ses intérêts.</div>`;
+}
+
+function simPassif(montant) {
+  return `<div class="fisc-note">Un crédit n'engendre aucune plus-value : il n'y a rien à
+    imposer. Saisissez le capital restant dû comme valorisation du compte — il se déduit
+    du patrimoine brut pour donner le patrimoine net, visible sur la vue d'ensemble et
+    dans l'onglet Indépendance.</div>`;
+}
+
+function simImmobilier(montant, gain, annees) {
+  const a = abattementsImmobilier(annees);
+  const ir = gain * (1 - a.ir) * IMMO_IR;
+  const ps = gain * (1 - a.ps) * IMMO_PS;
+
+  return bloc(`Cession après ${annees} ans de détention`,
+    [['Plus-value brute', gain, ''],
+     [`Abattement d'impôt sur le revenu (${(a.ir * 100).toFixed(0)} %)`, gain * a.ir, 'pos'],
+     ['Impôt sur le revenu (19 %)', ir, 'neg'],
+     [`Abattement de prélèvements sociaux (${(a.ps * 100).toFixed(0)} %)`, gain * a.ps, 'pos'],
+     ['Prélèvements sociaux (17,2 %)', ps, 'neg']],
+    montant - ir - ps, montant) +
+    `<div class="fisc-note ${a.ir >= 1 && a.ps >= 1 ? 'pos' : ''}">
+      ${a.ir >= 1 && a.ps >= 1
+        ? '✅ Après 30 ans, la plus-value est totalement exonérée.'
+        : `L'impôt sur le revenu s'efface après 22 ans, les prélèvements sociaux après 30 ans :
+           les deux barèmes d'abattement sont distincts.`}
+      <br>La plus-value de cession d'une <strong>résidence principale</strong> est exonérée
+      quelle que soit la durée de détention — ce simulateur vise les autres biens.
+    </div>`;
 }
 
 function simMetaux(montant, gain, annees) {

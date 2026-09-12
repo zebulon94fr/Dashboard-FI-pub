@@ -17,6 +17,7 @@ from backend.accounts import create_account, list_accounts, delete_account  # no
 from backend.db import get_db, init_db  # noqa: E402
 from backend.positions import create_position, load_portfolio, record_history  # noqa: E402
 from backend.dividendes import add_dividende  # noqa: E402
+from backend.fi import save_reglages  # noqa: E402
 from backend.rebalancing import save_cibles_classes  # noqa: E402
 from backend.transactions import add_transaction  # noqa: E402
 
@@ -27,7 +28,7 @@ COMPTES = [
         "positions": [
             {"nom": "Danone", "ticker": "BN.PA", "isin": "FR0000120644", "secteur": "Consommation", "zone": "Europe", "classe": "actions", "quantite": 25, "pru": 58.20, "cours": 68.40},
             {"nom": "Michelin", "ticker": "ML.PA", "isin": "FR001400AJ45", "secteur": "Industrie", "zone": "Europe", "classe": "actions", "quantite": 40, "pru": 28.10, "cours": 34.35},
-            {"nom": "ETF MSCI World", "ticker": "IWDA.AS", "secteur": "ETF diversifié", "zone": "Monde", "classe": "actions", "groupe": "MSCI World", "quantite": 120, "pru": 78.30, "cours": 96.10},
+            {"nom": "ETF MSCI World", "ticker": "IWDA.AS", "secteur": "ETF diversifié", "zone": "Monde", "classe": "actions", "groupe": "MSCI World", "ter": 0.20, "quantite": 120, "pru": 78.30, "cours": 96.10},
         ],
     },
     {
@@ -40,17 +41,17 @@ COMPTES = [
     },
     {
         "compte": {"nom": "Assurance vie", "type": "av", "etablissement": "Assureur",
-                   "date_ouverture": "2019-11-04", "cible_pct": 20},
+                   "date_ouverture": "2019-11-04", "cible_pct": 20, "frais_pct": 0.60},
         "positions": [
             {"nom": "Fonds euros", "secteur": "Fonds euros", "zone": "Europe", "classe": "obligations", "quantite": 1, "pru": 18000, "cours": 19450},
-            {"nom": "ETF actions monde", "ticker": "IWDA.AS", "secteur": "ETF diversifié", "zone": "Monde", "classe": "actions", "groupe": "MSCI World", "quantite": 45, "pru": 78.30, "cours": 96.10},
+            {"nom": "ETF actions monde", "ticker": "IWDA.AS", "secteur": "ETF diversifié", "zone": "Monde", "classe": "actions", "groupe": "MSCI World", "ter": 0.20, "quantite": 45, "pru": 78.30, "cours": 96.10},
         ],
     },
     {
         "compte": {"nom": "PER individuel", "type": "per", "etablissement": "Gestionnaire",
-                   "date_ouverture": "2022-01-10", "cible_pct": 15},
+                   "date_ouverture": "2022-01-10", "cible_pct": 15, "frais_pct": 0.80},
         "positions": [
-            {"nom": "Fonds actions Europe", "secteur": "Actions Europe", "zone": "Europe", "classe": "actions", "quantite": 120, "pru": 52.40, "cours": 58.90},
+            {"nom": "Fonds actions Europe", "secteur": "Actions Europe", "zone": "Europe", "classe": "actions", "ter": 1.10, "quantite": 120, "pru": 52.40, "cours": 58.90},
         ],
     },
     {
@@ -59,6 +60,27 @@ COMPTES = [
         "positions": [
             {"nom": "Bitcoin", "ticker": "BTC-EUR", "secteur": "Actifs numériques", "zone": "Décentralisé", "classe": "crypto", "quantite": 0.085, "pru": 32000, "cours": 61500},
             {"nom": "Ethereum", "ticker": "ETH-EUR", "secteur": "Actifs numériques", "zone": "Décentralisé", "classe": "crypto", "quantite": 1.4, "pru": 1850, "cours": 2740},
+        ],
+    },
+    {
+        "compte": {"nom": "Livret A", "type": "liquidites", "etablissement": "Banque",
+                   "date_ouverture": "2016-01-05"},
+        "positions": [
+            {"nom": "Livret A", "secteur": "Liquidités", "zone": "Europe", "classe": "monetaire", "quantite": 1, "pru": 18000, "cours": 18500},
+        ],
+    },
+    {
+        "compte": {"nom": "Résidence principale", "type": "immobilier", "etablissement": "Bien détenu en direct",
+                   "date_ouverture": "2017-09-20"},
+        "positions": [
+            {"nom": "Appartement", "secteur": "Immobilier", "zone": "Europe", "classe": "immobilier", "quantite": 1, "pru": 265000, "cours": 320000},
+        ],
+    },
+    {
+        "compte": {"nom": "Crédit immobilier", "type": "credit", "etablissement": "Banque prêteuse",
+                   "date_ouverture": "2017-09-20"},
+        "positions": [
+            {"nom": "Capital restant dû", "secteur": "", "zone": "", "quantite": 1, "pru": 212000, "cours": 166500},
         ],
     },
     {
@@ -154,6 +176,7 @@ def reset():
         db.execute("DELETE FROM dividendes")
         db.execute("DELETE FROM transactions")
         db.execute("DELETE FROM allocations_classes")
+        db.execute("DELETE FROM reglages")
     print("Comptes existants supprimés.")
 
 
@@ -176,6 +199,9 @@ def main():
     print(f"  Dividendes : {creer_dividendes(comptes_par_nom)} versement(s)")
 
     save_cibles_classes({"actions": 60, "obligations": 25, "or": 10, "crypto": 5})
+    save_reglages({"depenses_annuelles": 32000, "epargne_mensuelle": 1400,
+                   "taux_retrait": 4, "rendement_reel": 5, "horizon_ans": 20})
+    print("  Profil : 32 000 €/an de dépenses visées, 1 400 €/mois d'épargne")
     print("  Allocation cible : actions 60 %, obligations 25 %, or 10 %, crypto 5 %")
 
     record_history()

@@ -1,4 +1,4 @@
-import { Store, typeInfo, comptes, toutesPositions, totalPortefeuille, investiPortefeuille } from './state.js';
+import { Store, typeInfo, comptes, toutesPositions, investiPortefeuille } from './state.js';
 import { chartColors } from './theme.js';
 import { fmt, fmtP, cls, kpiCard, destroyChart, makeChart, fmtChart } from './core.js';
 import { couleursComptes, couleurIndex, alpha } from './colors.js';
@@ -31,7 +31,11 @@ export function renderOverview() {
   vide.innerHTML = '';
   corps.style.display = '';
 
-  const total = totalPortefeuille();
+  // Un crédit porte son capital restant dû en positif : il se retranche du
+  // patrimoine au lieu de s'y ajouter.
+  const actifBrut = liste.filter(c => !c.passif).reduce((s, c) => s + (c.valorisation || 0), 0);
+  const passif = liste.filter(c => c.passif).reduce((s, c) => s + (c.valorisation || 0), 0);
+  const total = actifBrut;
   const investi = investiPortefeuille();
   const pvLatent = liste.reduce((s, c) => s + (c.pv_latent || 0), 0);
   const pvGlobal = investi ? pvLatent / investi : 0;
@@ -41,13 +45,20 @@ export function renderOverview() {
   const var24h = Store.STATS?.var24h;
 
   document.getElementById('overviewCards').innerHTML =
-    kpiCard('Patrimoine total', fmt(total), fmtP(pvGlobal), cls(pvGlobal)) +
+    (passif
+      ? kpiCard('Patrimoine net', fmt(actifBrut - passif),
+          `${fmt(actifBrut)} d'actifs − ${fmt(passif)} de dettes`, 'neu')
+      : '') +
+    kpiCard(passif ? 'Actifs financiers et immobiliers' : 'Patrimoine total',
+      fmt(total), fmtP(pvGlobal), cls(pvGlobal)) +
     (var24h != null
       ? kpiCard('Variation 24 h', fmt(var24h), fmtP(Store.STATS.var24h_pct), cls(var24h))
       : '') +
     kpiCard('Investi', fmt(investi), `${liste.length} compte${liste.length > 1 ? 's' : ''}`, 'neu') +
     kpiCard('+/- Latent', fmt(pvLatent), fmtP(pvGlobal), cls(pvLatent)) +
-    liste.map(c => kpiCard(c.nom, fmt(c.valorisation), fmtP(c.pv_pct), cls(c.pv_pct))).join('');
+    liste.map(c => kpiCard(c.nom, (c.passif ? '− ' : '') + fmt(c.valorisation),
+      c.passif ? 'capital restant dû' : fmtP(c.pv_pct),
+      c.passif ? 'neg' : cls(c.pv_pct))).join('');
 
   // ── Alertes, calendrier fiscal et faits marquants ───────────
   renderAlertes();
@@ -72,7 +83,8 @@ export function renderOverview() {
   };
 
   // ── Répartition par compte ──────────────────────────────────
-  const actifs = liste.map((c, i) => ({ ...c, couleur: couleurs[i] })).filter(c => c.valorisation > 0);
+  const actifs = liste.map((c, i) => ({ ...c, couleur: couleurs[i] }))
+    .filter(c => c.valorisation > 0 && !c.passif);
   makeChart('chartAlloc', {
     type: 'doughnut',
     data: {
@@ -85,6 +97,7 @@ export function renderOverview() {
   // ── Répartition par type d'enveloppe ────────────────────────
   const parType = {};
   for (const c of liste) {
+    if (c.passif) continue;
     const t = typeInfo(c.type);
     const agrege = parType[c.type] ||= { label: t.label, couleur: t.couleur, valorisation: 0 };
     agrege.valorisation += c.valorisation || 0;

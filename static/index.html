@@ -32,7 +32,7 @@
 
   <div class="nav-item" data-tab="transactions" onclick="showTab('transactions')">📒 Mouvements</div>
   <div class="nav-item" data-tab="analyse" onclick="showTab('analyse')">🔬 Analyse</div>
-  <div class="nav-item" data-tab="simulation" onclick="showTab('simulation')">📈 Simulation</div>
+  <div class="nav-item" data-tab="simulation" onclick="showTab('simulation')">🎯 Indépendance</div>
   <div class="nav-item" data-tab="dividendes" onclick="showTab('dividendes')">💰 Dividendes</div>
   <div class="nav-item" data-tab="history" onclick="showTab('history')">Historique</div>
   <div class="nav-item" data-tab="fiscalite" onclick="showTab('fiscalite')">⚖️ Fiscalité</div>
@@ -187,81 +187,116 @@
   <!-- SIMULATION -->
   <div id="sec-simulation" class="section">
     <div class="section-header">
-      <div class="section-title">Simulateur de performance</div>
+      <div>
+        <div class="section-title">🎯 Indépendance financière</div>
+        <div class="section-subtitle">Patrimoine net, capital-cible et projection</div>
+      </div>
+      <button class="btn primary" id="simSaveBtn" onclick="saveProfil()">💾 Enregistrer le profil</button>
+    </div>
+
+    <div class="intro-box">
+      Une seule saisie — vos <strong>dépenses annuelles visées</strong> et votre
+      <strong>épargne mensuelle</strong> — suffit à répondre à la question que pose le nom de
+      ce dashboard : dans combien de temps pouvez-vous arrêter ? Le capital-cible, le taux de
+      couverture, la date d'indépendance et le Coast FI en découlent. La projection, elle,
+      tire mille trajectoires au lieu de composer un taux fixe : c'est le seul moyen de voir
+      le <strong>risque de séquence</strong>, qui décide de la réussite d'un plan bien plus
+      que le rendement moyen.
     </div>
 
     <div class="sim-params-grid">
       <div class="sim-param-card">
-        <div class="sim-param-title">🕐 Horizon</div>
-        <div class="sim-slider-row">
-          <input type="range" id="simYears" min="1" max="40" value="20" oninput="simUpdate()">
-          <span class="sim-val" id="simYearsVal">20 ans</span>
+        <div class="sim-param-title">🎯 Dépenses annuelles visées</div>
+        <input type="text" id="simDepenses" placeholder="ex : 30 000" oninput="onProfilChange()">
+        <div class="chart-hint" style="text-align:left">Ce qu'il vous faut pour vivre, une fois libre.</div>
+      </div>
+      <div class="sim-param-card">
+        <div class="sim-param-title">💶 Épargne mensuelle</div>
+        <input type="text" id="simEpargne" placeholder="ex : 1 500" oninput="onProfilChange()">
+        <div class="chart-hint" style="text-align:left">Ce que vous mettez de côté chaque mois.</div>
+      </div>
+      <div class="sim-param-card">
+        <div class="sim-param-title">🚰 Taux de retrait</div>
+        <input type="text" id="simRetrait" placeholder="4" oninput="onProfilChange()">
+        <div class="chart-hint" style="text-align:left">
+          4 % donne le « 25 fois les dépenses » usuel. Ce chiffre vient d'études américaines
+          à horizon trente ans, hors fiscalité française : un ordre de grandeur, pas une loi.
         </div>
       </div>
-
       <div class="sim-param-card">
-        <div class="sim-param-title">📈 Rendement annuel</div>
-        <div class="sim-presets">
-          <button class="sim-preset" onclick="setSimReturn(4)">Prudent 4%</button>
-          <button class="sim-preset active" onclick="setSimReturn(7)">Modéré 7%</button>
-          <button class="sim-preset" onclick="setSimReturn(10)">Optimiste 10%</button>
-        </div>
-        <div class="sim-slider-row">
-          <input type="range" id="simReturn" min="0" max="20" step="0.5" value="7" oninput="simUpdate()">
-          <span class="sim-val" id="simReturnVal">7,0 %/an</span>
+        <div class="sim-param-title">📈 Rendement réel attendu</div>
+        <input type="text" id="simRendement" placeholder="4" oninput="onProfilChange()">
+        <div class="chart-hint" style="text-align:left">
+          Net d'inflation. Les frais mesurés sur vos comptes en sont déduits automatiquement.
         </div>
       </div>
-
       <div class="sim-param-card">
-        <div class="sim-param-title">💶 Versement mensuel</div>
-        <div class="sim-slider-row">
-          <input type="range" id="simMonthly" min="0" max="5000" step="50" value="500" oninput="simUpdate()">
-          <span class="sim-val" id="simMonthlyVal">500 €/mois</span>
-        </div>
-      </div>
-
-      <div class="sim-param-card">
-        <div class="sim-param-title">📊 Inflation</div>
-        <div class="sim-slider-row">
-          <input type="range" id="simInflation" min="0" max="6" step="0.5" value="2" oninput="simUpdate()">
-          <span class="sim-val" id="simInflationVal">2,0 %/an</span>
-        </div>
-      </div>
-
-      <div class="sim-param-card">
-        <div class="sim-param-title">⚠️ Scénarios</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <label class="sim-check"><input type="checkbox" id="simBear" onchange="simUpdate()"> 🐻 Pessimiste (−3%)</label>
-          <label class="sim-check"><input type="checkbox" id="simBull" onchange="simUpdate()"> 🐂 Optimiste (+3%)</label>
-          <label class="sim-check"><input type="checkbox" id="simReal" checked onchange="simUpdate()"> 💶 Réel (hors inflation)</label>
-        </div>
-      </div>
-
-      <div class="sim-param-card">
-        <div class="sim-param-title">🚀 Point de départ</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <label class="sim-check"><input type="radio" name="simBase" value="current" checked onchange="simUpdate()"> Valorisation actuelle</label>
-          <label class="sim-check"><input type="radio" name="simBase" value="invested" onchange="simUpdate()"> Investi (PRU × Qté)</label>
-          <label class="sim-check"><input type="radio" name="simBase" value="custom" onchange="simUpdate()"> Personnalisé</label>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
-          <input type="number" id="simCustomStart" value="0" step="1000" style="width:140px" oninput="simUpdate()" placeholder="Montant €">
-          <span style="font-size:11px;color:var(--muted)">€ de départ</span>
+        <div class="sim-param-title">🕐 Horizon du Coast FI</div>
+        <input type="text" id="simHorizon" placeholder="25" oninput="onProfilChange()">
+        <div class="chart-hint" style="text-align:left">
+          Dans combien d'années le capital-cible doit être atteint sans plus rien verser.
         </div>
       </div>
     </div>
 
     <div class="cards" id="simCards" style="margin-top:16px"></div>
+    <div id="simFiNote" class="hint-box" style="display:none"></div>
 
     <div class="chart-box" style="margin-bottom:16px">
-      <div class="chart-title">Projection patrimoniale</div>
-      <div class="chart-wrap" style="height:280px"><canvas id="chartSim"></canvas></div>
+      <div class="chart-title">Où en êtes-vous</div>
+      <div id="simFiDetail"></div>
+    </div>
+
+    <div class="section-title" style="font-size:15px;margin:24px 0 12px">Projection</div>
+
+    <div class="sim-params-grid">
+      <div class="sim-param-card">
+        <div class="sim-param-title">🕐 Horizon de projection</div>
+        <div class="sim-slider-row">
+          <input type="range" id="simYears" min="1" max="40" value="20" oninput="simUpdate()">
+          <span class="sim-val" id="simYearsVal">20 ans</span>
+        </div>
+      </div>
+      <div class="sim-param-card">
+        <div class="sim-param-title">📊 Volatilité annuelle</div>
+        <div class="sim-slider-row">
+          <input type="range" id="simVol" min="0" max="40" step="1" value="15" oninput="simUpdate()">
+          <span class="sim-val" id="simVolVal">15 %</span>
+        </div>
+        <div class="chart-hint" style="text-align:left">
+          L'onglet Analyse mesure celle de votre portefeuille réel.
+        </div>
+      </div>
+      <div class="sim-param-card">
+        <div class="sim-param-title">🏖 Durée des retraits</div>
+        <div class="sim-slider-row">
+          <input type="range" id="simRetraite" min="0" max="50" step="5" value="30" oninput="simUpdate()">
+          <span class="sim-val" id="simRetraiteVal">30 ans</span>
+        </div>
+      </div>
+      <div class="sim-param-card">
+        <div class="sim-param-title">🎲 Nombre de trajectoires</div>
+        <select id="simTirages" onchange="simUpdate()">
+          <option value="200">200 — rapide</option>
+          <option value="1000" selected>1 000 — équilibré</option>
+          <option value="5000">5 000 — précis</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="cards" id="simProjCards" style="margin-top:16px"></div>
+
+    <div class="chart-box" style="margin-bottom:16px">
+      <div class="chart-title">Mille trajectoires, de la plus défavorable à la plus favorable</div>
+      <div class="chart-wrap" style="height:300px"><canvas id="chartSim"
+           role="img" aria-label="Éventail des trajectoires simulées : médiane encadrée des déciles pessimiste et optimiste"></canvas></div>
+      <div class="chart-hint" style="text-align:left" id="simNote"></div>
     </div>
 
     <div class="chart-box">
       <div class="chart-title">Tableau de projection annuelle</div>
       <div class="table-wrap" style="max-height:320px;overflow-y:auto">
-        <table id="simTable"></table>
+        <table id="simTable" style="width:100%;font-size:13px;border-collapse:collapse"></table>
       </div>
     </div>
   </div>
@@ -626,6 +661,10 @@
         <input type="date" id="aDateOuverture">
       </div>
       <div class="form-group">
+        <label>Frais de gestion annuels (%) <span class="opt">assurance vie, PER…</span></label>
+        <input type="text" id="aFrais" placeholder="ex : 0,8">
+      </div>
+      <div class="form-group">
         <label>Allocation cible (%) <span class="opt">optionnel</span></label>
         <input type="text" id="aCible" placeholder="0">
       </div>
@@ -718,6 +757,10 @@
         <label>Sous-jacent suivi <span class="opt">optionnel</span></label>
         <input type="text" id="fGroupe" placeholder="ex : MSCI World" list="fGroupeList">
         <datalist id="fGroupeList"></datalist>
+      </div>
+      <div class="form-group">
+        <label>Frais courants du support — TER (%) <span class="opt">optionnel</span></label>
+        <input type="text" id="fTer" placeholder="ex : 0,20">
       </div>
     </div>
     <div class="hint-box">

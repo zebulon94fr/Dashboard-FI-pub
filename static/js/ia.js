@@ -11,11 +11,15 @@ export function saveKey() {
 
 /** Résumé anonymisé du portefeuille : structure, pas d'identifiants de compte. */
 function resumePortefeuille() {
+  const passif = comptes().filter(c => c.passif).reduce((s, c) => s + (c.valorisation || 0), 0);
   return {
-    totalPatrimoine: totalPortefeuille().toFixed(2),
+    actifBrut: totalPortefeuille().toFixed(2),
+    passif: passif.toFixed(2),
+    patrimoineNet: (totalPortefeuille() - passif).toFixed(2),
     comptes: comptes().map(c => ({
       nom: c.nom,
       enveloppe: typeInfo(c.type).nom_complet || typeInfo(c.type).label,
+      estPassif: c.passif || undefined,
       anciennete: statutFiscal(c).texte,
       valorisation: (c.valorisation || 0).toFixed(2),
       investi: (c.investi || 0).toFixed(2),
