@@ -43,6 +43,20 @@ lancement et tout reste sur votre machine.
 
 ### Journal des mouvements
 
+#### Quel bouton, quand ?
+
+| Vous voulez… | Bouton | Ce qui se passe |
+|---|---|---|
+| Déclarer une ligne que vous détenez, pour la première fois | **+ Position** | La ligne est créée **et son achat initial enregistré au journal**, d'un seul geste |
+| Renforcer, alléger, verser, retirer, payer des frais | **+ Mouvement** | L'opération s'ajoute au journal ; quantité, PMP et prix de revient de la ligne sont recalculés |
+| Corriger le nom, le ticker, le secteur d'une ligne | **✏️ Modifier** sur la ligne | Seules les métadonnées changent ; quantité et PRU restent pilotés par le journal |
+
+Autrement dit : **+ Position** une fois par ligne, **+ Mouvement** à chaque opération qui suit.
+Le formulaire de position demande déjà une quantité et un PRU — c'est un achat qui s'ignore,
+et il est inscrit au journal avec la date d'acquisition que vous indiquez. La case peut être
+décochée si vous reprenez un historique dont vous ignorez les dates : la ligne est alors
+suivie en valorisation, mais reste hors du TWR, du TRI et des plus-values réalisées.
+
 Le dashboard fonctionne sans journal : on peut saisir une position à la main et suivre sa
 valorisation. Mais trois mesures resteront alors hors d'atteinte, parce qu'une photo du
 portefeuille ne sait pas distinguer un gain d'un apport.

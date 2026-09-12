@@ -59,7 +59,8 @@
     <button class="btn" id="btnRefresh" onclick="refreshQuotes()">⟳ Actualiser les cours</button>
     <button class="btn export" onclick="exportCSV()">⬇ Export CSV</button>
     <button class="btn primary" onclick="openAccountModal()">+ Compte</button>
-    <button class="btn primary" onclick="openPositionModal()">+ Position</button>
+    <button class="btn primary" onclick="openPositionModal()"
+            title="Ajouter une ligne que vous détenez — l'achat initial est enregistré en même temps">+ Position</button>
     <button class="btn" id="btnTelegram" onclick="sendTelegramSummary()" title="Envoyer le résumé sur Telegram">📱 Telegram</button>
   </div>
 </div>
@@ -139,7 +140,8 @@
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn" onclick="editCurrentAccount()">✏️ Modifier</button>
-        <button class="btn primary" onclick="openPositionModal()">+ Position</button>
+        <button class="btn primary" onclick="openPositionModal()"
+            title="Ajouter une ligne que vous détenez — l'achat initial est enregistré en même temps">+ Position</button>
       </div>
     </div>
     <div class="cards" id="compteCards"></div>
@@ -365,9 +367,14 @@
         <div class="section-title">📒 Journal des mouvements</div>
         <div class="section-subtitle">Achats, ventes et versements datés</div>
       </div>
-      <button class="btn primary" onclick="openTxModal()">+ Mouvement</button>
+      <button class="btn primary" onclick="openTxModal()"
+        title="Enregistrer une opération sur une ligne qui existe déjà : renforcement, vente, versement, frais">+ Mouvement</button>
     </div>
     <div class="intro-box">
+      <strong>Quel bouton, quand ?</strong> <strong>+ Position</strong> sert à déclarer une ligne
+      que vous détenez pour la première fois : le formulaire enregistre l'achat initial en même
+      temps, vous n'avez rien à saisir ici. <strong>+ Mouvement</strong> sert à tout ce qui arrive
+      <em>ensuite</em> — renforcer, alléger, verser, retirer, payer des frais.<br><br>
       Le journal est la source de vérité de vos positions : dès qu'un achat y figure, la
       quantité, le prix moyen pondéré et le prix de revient en euros de la ligne en sont
       déduits et ne se saisissent plus à la main. Il rend aussi possibles trois calculs
@@ -720,6 +727,25 @@
       <code>BTC-EUR</code> (Bitcoin), <code>GC=F</code> (once d'or).
       Sans ticker, le cours reste celui que vous saisissez ici.
     </div>
+    <div class="form-row" id="fAchatRow">
+      <div class="form-group full">
+        <label class="sim-check" style="font-size:12.5px;text-transform:none;color:var(--text)">
+          <input type="checkbox" id="fAvecAchat" checked onchange="onPositionAchatChange()">
+          Enregistrer l'achat correspondant dans le journal
+        </label>
+        <div id="fDateAchatGroup" style="margin-top:8px">
+          <label class="field-label">Date d'acquisition</label>
+          <input type="date" id="fDateAchat">
+          <div class="chart-hint" style="text-align:left;margin-top:6px">
+            Sans cette écriture, la ligne sera suivie en valorisation mais restera hors du
+            TWR, du TRI et des plus-values réalisées, et son prix de revient en euros ne
+            sera qu'une estimation au taux du jour. Décochez seulement si vous reprenez un
+            historique dont vous ignorez les dates.
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="hint-box">
       🧭 <strong>Classe d'actifs</strong> : elle pilote l'allocation cible du Rebalancing,
       toutes enveloppes confondues. <strong>Sous-jacent suivi</strong> : deux fonds portant

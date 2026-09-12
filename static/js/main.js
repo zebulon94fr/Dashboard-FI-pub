@@ -10,7 +10,7 @@ import {
 } from './accounts.js';
 import {
   openPositionModal, closeModal, savePosition,
-  onPositionAccountChange, onPositionDeviseChange,
+  onPositionAccountChange, onPositionDeviseChange, onPositionAchatChange,
 } from './positions.js';
 import {
   openDivModal, closeDivModal, saveDividende, deleteDividende,
@@ -132,7 +132,8 @@ Object.assign(window, {
   refreshQuotes, exportCSV, sendTelegramSummary,
   openAccountModal, closeAccountModal, saveAccount, selectAccountType,
   editCurrentAccount, deleteCurrentAccount, delPos,
-  openPositionModal, closeModal, savePosition, onPositionAccountChange, onPositionDeviseChange,
+  openPositionModal, closeModal, savePosition, onPositionAccountChange,
+  onPositionDeviseChange, onPositionAchatChange,
   openDivModal, closeDivModal, saveDividende, deleteDividende, editDividende,
   loadDividendes, onDividendeAccountChange,
   openTxModal, closeTxModal, saveTransaction, editTransaction, deleteTransaction,

@@ -71,6 +71,13 @@ export function openPositionModal(positionId = null) {
   remplirDatalist('fZoneList', valeursConnues('zone'));
   if (position?.classe) el('fClasse').value = position.classe;
 
+  // L'achat initial ne concerne que la création : sur une ligne existante, les
+  // opérations passent par le journal (onglet Mouvements).
+  el('fAchatRow').hidden = Boolean(positionEnEdition);
+  el('fAvecAchat').checked = !positionEnEdition;
+  el('fDateAchat').value = new Date().toISOString().slice(0, 10);
+  onPositionAchatChange();
+
   onPositionAccountChange(position?.devise);
   el('posModal').classList.add('open');
 }
@@ -95,6 +102,10 @@ export function onPositionAccountChange(deviseForcee = null) {
     el('fClasse').value = CLASSE_PAR_ENVELOPPE[compte?.type] || 'autre';
   }
   onPositionDeviseChange();
+}
+
+export function onPositionAchatChange() {
+  el('fDateAchatGroup').hidden = !el('fAvecAchat').checked;
 }
 
 export function onPositionDeviseChange() {
@@ -127,6 +138,12 @@ export async function savePosition() {
     groupe: el('fGroupe').value.trim(),
     taux_change: el('fTaux').value.trim() ? parseNum(el('fTaux').value) : null,
   };
+
+  // Créer une ligne avec une quantité et un PRU, c'est décrire un achat :
+  // le serveur l'inscrit au journal si une date est fournie.
+  if (!positionEnEdition && el('fAvecAchat').checked) {
+    payload.date_achat = el('fDateAchat').value;
+  }
 
   if (!payload.nom) { erreur.textContent = 'Le nom de la position est obligatoire.'; return; }
 

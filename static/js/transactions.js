@@ -72,11 +72,18 @@ export function onTxTypeChange() {
 
   const compte = compteById(el('txCompte').value);
   const positions = compte?.positions || [];
-  el('txHint').textContent = surLigne
+  el('txHint').innerHTML = surLigne
     ? (positions.length
-        ? 'Quantité et prix unitaire dans la devise de la ligne. Le prix de revient en euros est figé à cette date.'
-        : 'Créez d\'abord une position dans ce compte : un achat doit désigner la ligne qu\'il alimente.')
-    : 'Mouvement d\'espèces sur l\'enveloppe entière : il date un flux sans toucher au prix de revient d\'une ligne.';
+        ? 'Opération sur une ligne <strong>que vous détenez déjà</strong> : renforcement ou allègement. '
+          + 'Quantité et prix unitaire dans la devise de la ligne.<br>'
+          + 'Pour une ligne que le dashboard ne connaît pas encore, passez par '
+          + '<strong>+ Position</strong> : l\'achat initial y est enregistré en même temps.'
+        : 'Ce compte ne contient aucune ligne. Un achat doit désigner la position qu\'il alimente : '
+          + 'commencez par <strong>+ Position</strong>, qui crée la ligne et son achat d\'un seul geste. '
+          + '<button class="btn btn-mini" style="margin-left:6px" onclick="closeTxModal(); openPositionModal()">+ Position</button>')
+    : 'Mouvement d\'espèces sur l\'enveloppe entière : il date un flux sans toucher au prix de revient '
+      + 'd\'une ligne. Réservé aux comptes dont vous ne détaillez pas les positions — un fonds euros, '
+      + 'un versement PER. N\'en ajoutez pas un en doublon d\'un achat déjà saisi.';
 
   onTxDeviseChange();
 }

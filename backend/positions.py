@@ -213,7 +213,23 @@ def create_position(account_id, payload):
             champs["quantite"], champs["pru"], champs["cours"],
             champs["devise"], taux, cout_eur, valo, pv, pct,
         ))
-        return cur.lastrowid
+        position_id = cur.lastrowid
+
+    # Une position créée avec une quantité et un PRU décrit un achat qui
+    # s'ignore : on l'inscrit au journal plutôt que de laisser l'utilisateur
+    # faire une seconde saisie. C'est ce qui fige le prix de revient en euros
+    # et rend la ligne éligible au PMP, au TWR et au TRI.
+    date_achat = (payload.get("date_achat") or "").strip()
+    if date_achat and champs["quantite"] > 0 and champs["pru"] > 0:
+        from backend.transactions import add_transaction
+        add_transaction({
+            "date": date_achat, "account_id": account_id, "position_id": position_id,
+            "type": "achat", "quantite": champs["quantite"], "prix": champs["pru"],
+            "devise": champs["devise"], "taux_change": taux,
+            "note": "Achat initial, enregistré à la création de la ligne",
+        })
+
+    return position_id
 
 
 def update_position(position_id, payload):
