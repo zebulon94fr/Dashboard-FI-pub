@@ -3,7 +3,7 @@
 import logging
 import sys
 
-from flask import Flask, Response, request
+from flask import Flask, Response, jsonify, request
 from werkzeug.security import check_password_hash
 
 import config
@@ -60,6 +60,27 @@ def create_app():
     @app.route("/api/<path:_unused>", methods=["OPTIONS"])
     def options_handler(_unused):
         return ("", 200)
+
+    @app.errorhandler(404)
+    @app.errorhandler(405)
+    def route_api_inconnue(erreur):
+        """
+        Route d'API absente : le dire en JSON, et nommer la cause la plus probable.
+
+        Les fichiers statiques sont relus du disque à chaque requête, le code
+        Python seulement au démarrage. Après un « git pull » sans redémarrage,
+        l'interface appelle donc des routes que le serveur ne connaît pas encore.
+        Le gestionnaire OPTIONS générique fait alors répondre 405 au lieu de 404,
+        ce qui n'aide personne à comprendre.
+        """
+        if not request.path.startswith("/api/"):
+            return erreur
+        return jsonify({"error":
+            f"Route inconnue sur ce serveur : {request.method} {request.path}. "
+            "L'interface est probablement plus récente que le serveur — "
+            "redémarrez-le après un « git pull » : "
+            "sudo systemctl restart dashboard-fi"
+        }), erreur.code
 
     return app
 
