@@ -134,6 +134,10 @@ systemctl daemon-reload
 
 # ── 6. Activation ───────────────────────────────────────────────────────────
 titre "Activation"
+# Après 5 échecs en 5 minutes, systemd refuse de relancer l'unité tant que son
+# état d'échec n'est pas effacé. Sans ce reset, réinstaller après avoir corrigé
+# la cause d'une panne échouerait encore, sur « Start request repeated too quickly ».
+systemctl reset-failed dashboard-fi.service 2>/dev/null || true
 systemctl enable --now dashboard-fi.service
 info "dashboard-fi.service : activé au démarrage et lancé."
 
