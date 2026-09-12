@@ -26,6 +26,13 @@ JOURS_PAR_AN = 365
 # affiché à côté du ratio : sans lui, le chiffre n'est pas interprétable.
 TAUX_SANS_RISQUE = 0.025
 
+# En deçà, volatilité, performance annualisée et Sharpe ne sont pas publiés.
+# Annualiser une semaine revient à élever sa performance à la puissance 50 : un
+# portefeuille alimenté d'une ligne saisie à la main sortait ainsi des taux en
+# 10^21 et une volatilité à quatre chiffres. La performance de la période, elle,
+# reste juste quel que soit le nombre d'observations, et c'est elle qu'on montre.
+MIN_OBSERVATIONS = 20
+
 
 # ══════════════════════════════════════════════════════════════
 # SÉRIE DE RENDEMENTS
@@ -150,38 +157,53 @@ def metriques_risque(period_days=365):
 
     if len(rendements) < 2:
         return {
-            "volatilite": None, "sharpe": None, "drawdown": None,
-            "nb_observations": len(rendements),
+            "volatilite": None, "sharpe": None, "perf_annualisee": None,
+            "perf_periode": None, "drawdown": None,
+            "nb_observations": len(rendements), "annualise": False,
             "message": "Deux journées d'historique au minimum — actualisez les cours quelques jours.",
         }
 
     facteur = _annualisation()
-    ecart = _ecart_type(rendements)
-    volatilite = ecart * math.sqrt(facteur) if ecart else None
 
-    # Performance annualisée composée sur la période observée.
+    # Performance composée sur la période réellement observée : toujours juste,
+    # quel que soit le nombre de séances.
     compose = 1.0
     for r in rendements:
         compose *= (1 + r)
-    annees = len(rendements) / facteur
-    perf_annualisee = (compose ** (1 / annees) - 1) if annees > 0 and compose > 0 else None
+    perf_periode = compose - 1
 
-    sharpe = None
-    if volatilite and volatilite > 0 and perf_annualisee is not None:
-        sharpe = (perf_annualisee - TAUX_SANS_RISQUE) / volatilite
+    annualise = len(rendements) >= MIN_OBSERVATIONS
+    volatilite = perf_annualisee = sharpe = None
+
+    if annualise:
+        ecart = _ecart_type(rendements)
+        volatilite = ecart * math.sqrt(facteur) if ecart else None
+
+        annees = len(rendements) / facteur
+        if annees > 0 and compose > 0:
+            perf_annualisee = compose ** (1 / annees) - 1
+
+        if volatilite and volatilite > 0 and perf_annualisee is not None:
+            sharpe = (perf_annualisee - TAUX_SANS_RISQUE) / volatilite
 
     return {
         "volatilite": round(volatilite, 6) if volatilite else None,
         "perf_annualisee": round(perf_annualisee, 6) if perf_annualisee is not None else None,
+        "perf_periode": round(perf_periode, 6),
         "sharpe": round(sharpe, 3) if sharpe is not None else None,
         "taux_sans_risque": TAUX_SANS_RISQUE,
         "base_annualisation": facteur,
+        "annualise": annualise,
         "drawdown": max_drawdown(period_days),
         "nb_observations": len(rendements),
         "periode_jours": period_days,
-        "message": None if len(rendements) >= 20 else
-                   f"Seulement {len(rendements)} journées observées : ces mesures "
-                   "demandent plusieurs semaines d'historique pour vouloir dire quelque chose.",
+        "message": None if annualise else
+                   f"{len(rendements)} séance(s) observée(s) : trop peu pour annualiser quoi que ce "
+                   f"soit — il en faut au moins {MIN_OBSERVATIONS}. Volatilité, performance annualisée "
+                   "et ratio de Sharpe réapparaîtront d'eux-mêmes une fois l'historique constitué. "
+                   "La performance affichée est celle de la période, calculée sur les seuls mouvements "
+                   "enregistrés : si elle vous paraît démesurée, c'est qu'un apport manque au journal — "
+                   "un versement non déclaré est compté comme une performance.",
     }
 
 

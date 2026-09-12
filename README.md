@@ -84,6 +84,7 @@ des flux : sans cela, un versement passerait pour une journée exceptionnelle et
 | Mesure | Ce qu'elle répond |
 |---|---|
 | **Volatilité annualisée** | Écart-type des rendements quotidiens × √252 — √365 si le portefeuille contient des cryptoactifs, qui cotent en continu |
+| **Performance de la période** | Affichée tant que l'historique est trop court pour annualiser (moins de 20 séances) ; elle reste juste quel que soit le nombre d'observations |
 | **Perte maximale** | La baisse qu'il a fallu supporter sans vendre, datée, avec sa durée de récupération |
 | **Ratio de Sharpe** | Performance au-delà du taux sans risque, rapportée à la volatilité |
 | **Concentration** | Poids de la première ligne, du top 5, et indice de Herfindahl traduit en « équivalent nombre de lignes équipondérées » |
@@ -91,6 +92,15 @@ des flux : sans cela, un versement passerait pour une journée exceptionnelle et
 | **Exposition aux devises** | Répartition par devise, et part du patrimoine hors zone euro |
 | **Attribution** | Décomposition exacte du gain en effet marché et effet change, rendue possible par le prix de revient figé à l'achat |
 | **Contribution** | Poids de la ligne × sa performance, en points de performance du portefeuille ; la somme égale la performance globale, ce qui la rend vérifiable |
+
+Volatilité, performance annualisée et ratio de Sharpe ne sont publiés qu'à partir de vingt
+séances observées. Annualiser une semaine revient à élever sa performance à la puissance
+cinquante : le dashboard préfère afficher un tiret et la performance de la période plutôt
+qu'un taux en 10²¹. Ces trois mesures réapparaissent d'elles-mêmes une fois l'historique
+constitué.
+
+Un bond de valorisation qu'aucun mouvement n'explique est compté comme une performance :
+c'est le signe qu'un versement manque au journal.
 
 ### Allocation cible et rééquilibrage
 

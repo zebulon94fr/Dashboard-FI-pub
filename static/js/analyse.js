@@ -10,8 +10,26 @@ let periode = 365;
 let DONNEES = null;
 
 const el = id => document.getElementById(id);
-const pct = (v, d = 1) => v == null ? '—' : (v * 100).toFixed(d).replace('.', ',') + ' %';
-const pts = v => v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(2).replace('.', ',') + ' pts';
+
+/**
+ * Nombre décimal borné, en notation française.
+ *
+ * `toFixed` bascule en notation exponentielle au-delà de 1e21 : un ratio de
+ * Sharpe aberrant s'affichait « 1,1948150642436363e+48 ». Intl s'en tient à des
+ * chiffres, et au-delà d'un seuil absurde on renonce plutôt que d'afficher une
+ * ligne de digits qui ne veut rien dire.
+ */
+function nb(valeur, decimales = 1) {
+  if (valeur == null || !Number.isFinite(valeur)) return '—';
+  if (Math.abs(valeur) >= 1e9) return '—';
+  return new Intl.NumberFormat('fr-FR', {
+    minimumFractionDigits: decimales, maximumFractionDigits: decimales,
+  }).format(valeur);
+}
+
+const pct = (v, d = 1) => v == null || !Number.isFinite(v) ? '—' : `${nb(v * 100, d)} %`;
+const pts = v => v == null || !Number.isFinite(v)
+  ? '—' : `${v >= 0 ? '+' : ''}${nb(v * 100, 2)} pts`;
 
 const TH = 'style="padding:7px 10px;text-align:left;color:var(--muted);font-size:11px;border-bottom:1px solid var(--border)"';
 const TD = 'style="padding:7px 10px;border-bottom:1px solid var(--border)"';
@@ -49,14 +67,20 @@ function renderRisque(r) {
   const dd = r.drawdown || {};
   const note = el('analyseNote');
 
+  const seances = `${r.nb_observations} séance${r.nb_observations > 1 ? 's' : ''} observée${r.nb_observations > 1 ? 's' : ''}`;
+
   el('analyseCards').innerHTML =
     kpiCard('Volatilité annualisée', pct(r.volatilite),
-      r.nb_observations ? `${r.nb_observations} séances observées` : '', 'neu') +
+      r.annualise ? seances : 'historique trop court', 'neu') +
     kpiCard('Perte maximale', pct(dd.drawdown),
       dd.date_creux ? `creux le ${dd.date_creux}` : '', dd.drawdown ? 'neg' : 'neu') +
-    kpiCard('Performance annualisée', pct(r.perf_annualisee), 'hors versements', cls(r.perf_annualisee)) +
-    kpiCard('Ratio de Sharpe', r.sharpe == null ? '—' : r.sharpe.toFixed(2).replace('.', ','),
-      `taux sans risque ${pct(r.taux_sans_risque)}`, cls(r.sharpe));
+    // Tant que l'historique est trop court pour annualiser, on montre la
+    // performance de la période : elle, au moins, veut dire quelque chose.
+    (r.annualise
+      ? kpiCard('Performance annualisée', pct(r.perf_annualisee), 'hors versements', cls(r.perf_annualisee))
+      : kpiCard('Performance de la période', pct(r.perf_periode), `sur ${seances}`, cls(r.perf_periode))) +
+    kpiCard('Ratio de Sharpe', nb(r.sharpe, 2),
+      r.annualise ? `taux sans risque ${pct(r.taux_sans_risque)}` : 'historique trop court', cls(r.sharpe));
 
   note.textContent = r.message || '';
   note.style.display = r.message ? '' : 'none';
