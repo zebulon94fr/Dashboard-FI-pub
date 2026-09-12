@@ -320,9 +320,10 @@ sudo ufw allow 8742/tcp
   répertoire d'installation ; `NoNewPrivileges`, `PrivateTmp` et `ProtectHome` réduisent la
   surface d'attaque d'un service qui expose des données financières.
 
-`ProtectHome=true` bloque l'accès à `/home` : si vous installez sous `/home/<utilisateur>`
-plutôt que dans `/opt`, retirez cette ligne de `deploy/dashboard-fi.service` avant
-d'installer.
+`ProtectHome=true` rend `/home` inaccessible au service. Une installation sous
+`/home/<utilisateur>` ne pourrait donc même pas lire son propre `ExecStart` :
+`install_service.sh` détecte ce cas et écrit `ProtectHome=false` dans l'unité installée,
+en le signalant. Le reste du durcissement est conservé.
 
 ## API
 

@@ -27,7 +27,9 @@ Restart=always
 RestartSec=5
 
 # Durcissement : le service ne peut écrire que dans son répertoire d'installation.
-# ProtectHome bloque /home — à retirer si vous installez sous /home/<utilisateur>.
+# ProtectHome rend /home inaccessible au service : install_service.sh le passe
+# automatiquement à false quand l'installation se trouve sous /home, sans quoi
+# le service ne pourrait même pas lire son propre ExecStart.
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

@@ -109,11 +109,24 @@ fi
 # Les chemins et l'utilisateur sont réécrits à la volée : aucune édition
 # manuelle nécessaire si l'installation n'est pas dans /opt/dashboard-fi.
 titre "Unités systemd"
+
+# ProtectHome=true vide /home du point de vue du service : installé sous
+# /home/<utilisateur>, il ne peut alors même pas lire son propre ExecStart et
+# refuse de démarrer. On désactive le durcissement dans ce cas précis, plutôt
+# que de laisser l'utilisateur le découvrir au premier « systemctl start ».
+PROTECT_HOME="s#^ProtectHome=true\$#ProtectHome=true#"
+if [[ "$RACINE" == /home/* ]]; then
+  PROTECT_HOME="s#^ProtectHome=true\$#ProtectHome=false#"
+  alerte "Installation sous /home : ProtectHome désactivé dans les unités."
+  alerte "Le reste du durcissement (ProtectSystem, NoNewPrivileges…) est conservé."
+fi
+
 for source in "$RACINE"/deploy/dashboard-fi*.service "$RACINE"/deploy/dashboard-fi*.timer; do
   cible="$UNITES/$(basename "$source")"
   sed -e "s#/opt/dashboard-fi#$RACINE#g" \
       -e "s#^User=dashboard\$#User=$UTILISATEUR#" \
       -e "s#^Group=dashboard\$#Group=$GROUPE#" \
+      -e "$PROTECT_HOME" \
       "$source" > "$cible"
   info "$(basename "$cible")"
 done

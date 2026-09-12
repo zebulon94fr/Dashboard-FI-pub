@@ -141,9 +141,18 @@ MIGRATIONS = [
 def _migrate(db):
     for table, colonne, definition in MIGRATIONS:
         existantes = {r["name"] for r in db.execute(f"PRAGMA table_info({table})")}
-        if colonne not in existantes:
+        if colonne in existantes:
+            continue
+        try:
             db.execute(f"ALTER TABLE {table} ADD COLUMN {colonne} {definition}")
             log.info(f"Migration : {table}.{colonne} ajoutée")
+        except sqlite3.OperationalError as e:
+            # Plusieurs workers gunicorn démarrent en parallèle et migrent la
+            # même base : celui qui arrive second doit constater que la colonne
+            # existe déjà, pas refuser de démarrer.
+            if "duplicate column" not in str(e).lower():
+                raise
+            log.info(f"Migration : {table}.{colonne} déjà ajoutée par un autre processus")
 
 
 @contextlib.contextmanager
