@@ -95,6 +95,58 @@ chmod +x "$RACINE"/scripts/*.sh "$RACINE"/scripts/*.py
 install -d -o "$UTILISATEUR" -g "$GROUPE" "$RACINE/backups" "$RACINE/.cache"
 info "Propriétaire : $UTILISATEUR:$GROUPE — répertoire : $RACINE"
 
+# Être propriétaire du répertoire ne suffit pas : il faut aussi pouvoir y entrer,
+# donc disposer du bit x sur chacun de ses parents. Un /home/<utilisateur> en
+# 0750 — le défaut de Debian — le refuse à un utilisateur système dédié, et
+# systemd échoue alors sur un « 200/CHDIR » qui ne dit pas quel parent bloque.
+sous_utilisateur() {
+  if command -v runuser >/dev/null; then
+    runuser -u "$UTILISATEUR" -- "$@" 2>/dev/null
+  elif command -v sudo >/dev/null; then
+    sudo -n -u "$UTILISATEUR" "$@" 2>/dev/null
+  else
+    return 0   # aucun moyen de vérifier : on laisse systemd trancher
+  fi
+}
+
+if sous_utilisateur test -x "$RACINE"; then
+  info "« $UTILISATEUR » peut entrer dans le répertoire."
+else
+  bloquant="$RACINE"
+  chemin=""
+  IFS='/' read -ra segments <<< "$RACINE"
+  for segment in "${segments[@]}"; do
+    [[ -n "$segment" ]] || continue
+    chemin="$chemin/$segment"
+    if ! sous_utilisateur test -x "$chemin"; then bloquant="$chemin"; break; fi
+  done
+  proprietaire="$(stat -c '%U' "$bloquant" 2>/dev/null || echo inconnu)"
+  droits="$(stat -c '%A' "$bloquant" 2>/dev/null || echo '?')"
+
+  echo >&2
+  alerte "« $UTILISATEUR » ne peut pas entrer dans $RACINE."
+  alerte "Répertoire bloquant : $bloquant ($droits, propriétaire $proprietaire)"
+  cat >&2 <<MESSAGE
+
+  Le service échouerait au démarrage sur « status=200/CHDIR ». Deux solutions :
+
+  1. Faire tourner le service sous le propriétaire du dossier — le plus simple
+     pour une installation dans un répertoire personnel :
+
+       sudo DASHBOARD_USER=$proprietaire $RACINE/scripts/install_service.sh
+
+  2. Autoriser la traversée de ce seul répertoire, sans en rendre le contenu
+     listable par les autres utilisateurs :
+
+       sudo chmod o+x $bloquant
+
+  Une installation sous /opt/dashboard-fi évite la question et conserve le
+  durcissement complet, ProtectHome compris.
+
+MESSAGE
+  exit 1
+fi
+
 # ── 4. Configuration ────────────────────────────────────────────────────────
 titre "Configuration"
 if [[ -f "$FICHIER_ENV" ]]; then
