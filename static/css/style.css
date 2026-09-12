@@ -105,6 +105,37 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent)
 .card-sub{font-size:12px;margin-top:4px}
 .pos{color:var(--green)}.neg{color:var(--red)}.neu{color:var(--muted)}
 
+/* ── Alertes de la vue d'ensemble ── */
+.alert-list{display:grid;gap:8px}
+.alert-list:not(:empty){margin-bottom:24px}
+.alert{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--muted);border-radius:8px;padding:10px 14px}
+.alert-icon{flex:none;font-size:14px;line-height:1.5}
+.alert-body{min-width:0}
+.alert-title{font-size:13px;font-weight:600;line-height:1.5}
+.alert-text{font-size:12px;color:var(--muted);line-height:1.6;margin-top:2px}
+.alert.danger{border-left-color:var(--red)}
+.alert.warn{border-left-color:var(--yellow)}
+.alert.good{border-left-color:var(--green)}
+.alert.info{border-left-color:var(--accent)}
+
+/* ── Calendrier fiscal ── */
+.cal-row{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.cal-row:last-of-type{border-bottom:none}
+.cal-name{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-when{font-size:12.5px;font-weight:700;white-space:nowrap}
+.cal-sub{grid-column:1/-1;font-size:11px;color:var(--muted);line-height:1.5}
+.cal-bar{grid-column:1/-1;height:4px;border-radius:2px;background:var(--surface2);overflow:hidden;margin-top:5px}
+.cal-bar>span{display:block;height:100%;border-radius:2px}
+
+/* ── Faits marquants ── */
+.fact-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:14px 0 2px}
+.fact-title:first-child{margin-top:0}
+.fact-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px}
+.fact-row:last-of-type{border-bottom:none}
+.fact-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fact-sub{font-size:10.5px;color:var(--muted);font-weight:400}
+.fact-val{white-space:nowrap;font-weight:600;text-align:right}
+
 /* ── Cartes de compte ── */
 .account-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
 .account-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}

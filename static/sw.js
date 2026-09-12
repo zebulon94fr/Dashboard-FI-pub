@@ -1,6 +1,8 @@
 // Service worker minimal : cache-first pour le shell statique (HTML/CSS/JS/icônes),
 // jamais de cache pour /api/* — les données financières doivent toujours être fraîches.
-const CACHE_NAME = 'dashboard-fi-shell-v1';
+// Le cache étant servi en priorité, ce nom doit changer à chaque modification
+// du shell : l'ancien cache est purgé à l'activation et le nouveau code arrive.
+const CACHE_NAME = 'dashboard-fi-shell-v2';
 
 self.addEventListener('install', () => {
   self.skipWaiting();

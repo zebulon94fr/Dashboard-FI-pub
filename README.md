@@ -27,7 +27,7 @@ lancement et tout reste sur votre machine.
 
 | Onglet | Contenu |
 |---|---|
-| **Vue d'ensemble** | Patrimoine total, répartition par compte et par type d'enveloppe, performance, top 10 des positions, répartition sectorielle et géographique |
+| **Vue d'ensemble** | Patrimoine total, variation 24 h, alertes, calendrier fiscal, répartition par compte et par type d'enveloppe, performance, top 10 des positions, faits marquants, répartition sectorielle et géographique |
 | **Mes comptes** | Création, modification et suppression des comptes ; une page par compte avec le détail des positions |
 | **Simulation** | Projection patrimoniale (horizon, rendement, versements mensuels, inflation, scénarios haussier/baissier) |
 | **Dividendes** | Saisie des versements, revenus par mois et par année, top positions, TRI (XIRR) par ligne |
@@ -38,6 +38,24 @@ lancement et tout reste sur votre machine.
 
 Également : thème clair/sombre, masquage des montants, export CSV, application installable
 (PWA) utilisable hors ligne, et interface responsive jusqu'au format mobile.
+
+### Alertes et calendrier fiscal
+
+La vue d'ensemble signale ce qui demande une décision, à partir des seules données déjà
+saisies :
+
+| Alerte | Déclenchement |
+|---|---|
+| Cap fiscal | 90 jours avant et après le seuil du compte (5 ans PEA, 8 ans assurance vie, 22 ans métaux), daté à partir de la date d'ouverture |
+| Dérive d'allocation | Écart d'au moins 5 points entre l'allocation réelle et la cible du rebalancing |
+| Taux de change non confirmé | Position en devise étrangère encore valorisée 1:1 avec l'euro, faute de taux récupéré |
+| Ticker muet | Aucun cours jamais récupéré — le plus souvent une faute de frappe dans le ticker |
+| Cours figé | Dernier cours obtenu il y a plus de 5 jours : titre suspendu, radié ou ticker devenu invalide |
+| Forte moins-value | Ligne à −20 % ou moins de plus-value latente |
+
+Le calendrier fiscal affiche pour chaque enveloppe à seuil la date exacte du cap et la
+progression vers celle-ci. Les versements n'étant pas enregistrés, le plafond du PEA n'est
+en revanche pas contrôlé.
 
 ## Types de comptes
 
@@ -277,7 +295,7 @@ autre client peut donc piloter le dashboard de la même façon.
 | `GET` `POST` | `/api/accounts/<id>/positions` | Positions d'un compte |
 | `PUT` `DELETE` | `/api/positions/<id>` | Modification, déplacement vers un autre compte, suppression |
 | `GET` | `/api/quotes` | Actualise cours et taux de change |
-| `GET` | `/api/stats` | Agrégats, meilleures et pires positions, variation 24 h |
+| `GET` | `/api/stats` | Agrégats, meilleures et pires positions, variation 24 h, journées extrêmes, cours périmés |
 | `GET` `POST` | `/api/dividendes` | Versements enregistrés |
 | `PUT` `DELETE` | `/api/dividendes/<id>` | Modification et suppression |
 | `GET` | `/api/tri?nom=&account_id=` | TRI d'une position |

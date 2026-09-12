@@ -227,3 +227,8 @@ def record_price_history(points, ts):
                 INSERT INTO price_history (position_id, ts, cours, variation)
                 VALUES (?,?,?,?)
             """, (position_id, ts, cours, variation))
+
+        # Même rétention que l'historique intraday : au-delà de 90 jours, seule
+        # la série quotidienne est conservée. Sans cette purge la table grossit
+        # indéfiniment (une ligne par position et par actualisation).
+        db.execute("DELETE FROM price_history WHERE ts < datetime('now','-90 days')")
