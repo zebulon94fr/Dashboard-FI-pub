@@ -1,7 +1,7 @@
 // Calendrier fiscal, alertes de portefeuille et faits marquants de la Vue
 // d'ensemble. Tout est dérivé de données déjà disponibles : dates d'ouverture
 // des comptes, seuils du catalogue, allocations cibles et agrégats /api/stats.
-import { Store, typeInfo, comptes, toutesPositions, totalPortefeuille } from './state.js';
+import { Store, typeInfo, comptes, toutesPositions } from './state.js';
 import { fmt, fmtP, fmtDate, esc } from './core.js';
 
 const el = id => document.getElementById(id);
@@ -9,7 +9,6 @@ const el = id => document.getElementById(id);
 const JOUR = 86400000;
 const PREAVIS_JOURS = 90;      // fenêtre d'alerte autour d'un cap fiscal
 const SEUIL_BAISSE = -0.20;    // moins-value latente signalée sur une ligne
-const DERIVE_PTS = 5;          // écart à l'allocation cible signalé
 
 /** Ce que le franchissement du seuil apporte, par enveloppe. */
 const APRES_SEUIL = {
@@ -77,7 +76,6 @@ function parseHorodatage(valeur) {
 function construireAlertes() {
   const alertes = [];
   const liste = comptes();
-  const total = totalPortefeuille();
 
   // ── Caps fiscaux : 90 jours avant, 90 jours après ──────────
   for (const c of liste) {
@@ -102,32 +100,28 @@ function construireAlertes() {
   }
 
   // ── Dérive de l'allocation cible ───────────────────────────
-  const avecCible = liste.filter(c => (c.cible_pct || 0) > 0);
-  if (avecCible.length && total > 0) {
-    const sommeCibles = avecCible.reduce((s, c) => s + c.cible_pct, 0);
-    if (Math.abs(sommeCibles - 100) > 1) {
+  // Les cibles vivent sur les classes d'actifs, pas sur les enveloppes : c'est
+  // le serveur qui les compare, bandes de tolérance comprises.
+  const derive = Store.STATS?.derive_classes;
+  if (derive?.cibles_definies) {
+    if (!derive.cibles_valides) {
       alertes.push({
         ton: 'info', icone: '⚖',
         titre: 'Allocations cibles incomplètes',
-        texte: `Vos cibles totalisent ${sommeCibles.toFixed(0)} % au lieu de 100 %. `
-             + 'Tant qu\'elles ne bouclent pas, les écarts de l\'onglet Rebalancing ne veulent rien dire.',
+        texte: `Vos cibles par classe d'actifs totalisent ${derive.total_cibles.toFixed(0)} % `
+             + 'au lieu de 100 %. Tant qu\'elles ne bouclent pas, les écarts de l\'onglet '
+             + 'Rebalancing ne veulent rien dire.',
       });
-    } else {
-      const derives = liste
-        .map(c => ({ compte: c, ecart: (c.cible_pct || 0) - (c.valorisation / total) * 100 }))
-        .filter(x => Math.abs(x.ecart) >= DERIVE_PTS)
-        .sort((a, b) => Math.abs(b.ecart) - Math.abs(a.ecart));
-
-      if (derives.length) {
-        const detail = derives.slice(0, 3).map(x =>
-          `${esc(x.compte.nom)} ${x.ecart > 0 ? 'sous' : 'sur'}-pondéré de ${Math.abs(x.ecart).toFixed(1)} pts`).join(', ');
-        alertes.push({
-          ton: 'warn', icone: '⚖',
-          titre: `${derives.length} compte${derives.length > 1 ? 's' : ''} au-delà de ${DERIVE_PTS} points d'écart`,
-          texte: `${detail}${derives.length > 3 ? `, et ${derives.length - 3} autre${derives.length - 3 > 1 ? 's' : ''}` : ''}. `
-               + 'L\'onglet Rebalancing calcule les montants à arbitrer.',
-        });
-      }
+    } else if (derive.hors_bande.length) {
+      const detail = derive.hors_bande.slice(0, 3).map(c =>
+        `${esc(c.label)} ${c.statut === 'sous_pondere' ? 'sous' : 'sur'}-pondéré de ${Math.abs(c.ecart_pts).toFixed(1)} pts`).join(', ');
+      const reste = derive.hors_bande.length - 3;
+      alertes.push({
+        ton: 'warn', icone: '⚖',
+        titre: `${derive.hors_bande.length} classe${derive.hors_bande.length > 1 ? 's' : ''} d'actifs hors bande de tolérance`,
+        texte: `${detail}${reste > 0 ? `, et ${reste} autre${reste > 1 ? 's' : ''}` : ''}. `
+             + 'L\'onglet Rebalancing calcule les montants à arbitrer, apport en priorité.',
+      });
     }
   }
 

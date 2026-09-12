@@ -31,6 +31,7 @@
   </div>
 
   <div class="nav-item" data-tab="transactions" onclick="showTab('transactions')">📒 Mouvements</div>
+  <div class="nav-item" data-tab="analyse" onclick="showTab('analyse')">🔬 Analyse</div>
   <div class="nav-item" data-tab="simulation" onclick="showTab('simulation')">📈 Simulation</div>
   <div class="nav-item" data-tab="dividendes" onclick="showTab('dividendes')">💰 Dividendes</div>
   <div class="nav-item" data-tab="history" onclick="showTab('history')">Historique</div>
@@ -264,6 +265,99 @@
   </div>
 
   <!-- DIVIDENDES -->
+  <!-- ANALYSE -->
+  <div id="sec-analyse" class="section">
+    <div class="section-header">
+      <div>
+        <div class="section-title">🔬 Analyse du portefeuille</div>
+        <div class="section-subtitle">Risque, concentration, devises et contribution</div>
+      </div>
+    </div>
+    <div class="intro-box">
+      Le dashboard sait dire combien vous avez gagné ; cette page dit <strong>ce que vous avez
+      risqué pour l'obtenir</strong> et <strong>d'où vient le gain</strong>. Toutes les mesures
+      sont calculées sur des rendements corrigés des versements : sans cela, un apport passerait
+      pour une journée exceptionnelle et gonflerait à la fois la performance et la volatilité.
+    </div>
+
+    <div class="history-controls" id="analysePeriodes">
+      <span style="font-size:12px;color:var(--muted)">Période :</span>
+      <button class="period-btn" data-jours="90" onclick="setAnalysePeriod(90)">3M</button>
+      <button class="period-btn" data-jours="180" onclick="setAnalysePeriod(180)">6M</button>
+      <button class="period-btn active" data-jours="365" onclick="setAnalysePeriod(365)">1A</button>
+      <button class="period-btn" data-jours="1825" onclick="setAnalysePeriod(1825)">Tout</button>
+    </div>
+
+    <div id="analyseBody">
+      <div class="cards" id="analyseCards"></div>
+      <div id="analyseNote" class="hint-box" style="display:none"></div>
+
+      <div class="chart-grid">
+        <div class="chart-box">
+          <div class="chart-title">Plus forte baisse subie</div>
+          <div id="analyseDrawdown"></div>
+          <div class="chart-hint">
+            La volatilité décrit l'agitation ; la perte maximale décrit ce qu'il a fallu
+            supporter sans vendre. C'est souvent la seule des deux qui parle vraiment.
+          </div>
+        </div>
+        <div class="chart-box">
+          <div class="chart-title">Répartition par classe d'actifs</div>
+          <div class="chart-wrap"><canvas id="chartClasses"></canvas></div>
+        </div>
+      </div>
+
+      <div class="chart-box" style="margin-bottom:16px">
+        <div class="chart-title">Classes d'actifs — détail</div>
+        <table id="analyseClasses" style="width:100%;font-size:13px;border-collapse:collapse"></table>
+      </div>
+
+      <div class="section-title" style="font-size:15px;margin:24px 0 12px">Concentration</div>
+      <div class="cards" id="analyseConcKpis" style="margin-bottom:16px"></div>
+      <div class="chart-box" style="margin-bottom:16px">
+        <div class="chart-title">Dix premières expositions</div>
+        <div class="chart-wrap h200"><canvas id="chartConcentration"></canvas></div>
+        <div class="chart-hint">
+          Deux fonds suivant le même indice, logés sur deux enveloppes, sont une seule
+          exposition. Renseignez le champ « Sous-jacent suivi » d'une position pour qu'ils
+          soient regroupés ici.
+        </div>
+      </div>
+      <div class="chart-box" style="margin-bottom:16px">
+        <table id="analyseConcentration" style="width:100%;font-size:13px;border-collapse:collapse"></table>
+      </div>
+
+      <div class="section-title" style="font-size:15px;margin:24px 0 12px">Devises</div>
+      <div class="chart-grid">
+        <div class="chart-box">
+          <div class="chart-title">Exposition par devise</div>
+          <div class="chart-wrap"><canvas id="chartDevises"></canvas></div>
+        </div>
+        <div class="chart-box">
+          <div class="chart-title">D'où vient la plus-value</div>
+          <div id="analyseAttribution"></div>
+        </div>
+      </div>
+      <div class="chart-box" style="margin-bottom:16px">
+        <table id="analyseDevises" style="width:100%;font-size:13px;border-collapse:collapse"></table>
+      </div>
+
+      <div class="section-title" style="font-size:15px;margin:24px 0 12px">Contribution à la performance</div>
+      <div class="chart-box" style="margin-bottom:16px">
+        <div class="chart-title">Ce qui a fait bouger le patrimoine</div>
+        <div class="chart-wrap h200"><canvas id="chartContributions"></canvas></div>
+        <div class="chart-hint">
+          Un classement par plus-value absolue mélange taille et mérite. La contribution
+          répond à la vraie question — poids de la ligne multiplié par sa performance — et
+          se somme exactement à la performance du portefeuille.
+        </div>
+      </div>
+      <div class="chart-box">
+        <table id="analyseContributions" style="width:100%;font-size:13px;border-collapse:collapse"></table>
+      </div>
+    </div>
+  </div>
+
   <!-- JOURNAL DES MOUVEMENTS -->
   <div id="sec-transactions" class="section">
     <div class="section-header">
@@ -335,6 +429,19 @@
       </div>
     </div>
 
+    <div class="chart-box" style="margin-bottom:16px">
+      <div class="chart-title">Rendements — 12 mois glissants</div>
+      <div class="cards" id="divRendementsKpis" style="margin-bottom:12px"></div>
+      <table id="divRendements" style="width:100%;font-size:13px;border-collapse:collapse"></table>
+      <div class="chart-hint" style="text-align:left">
+        Le <strong>rendement courant</strong> rapporte les versements à la valorisation : ce que
+        la ligne sert au prix où elle cote aujourd'hui. Le <strong>rendement sur prix de
+        revient</strong> les rapporte à ce que vous avez payé — c'est lui qui récompense la
+        détention longue. Le <strong>taux de prélèvement</strong> montre ce que coûte le
+        logement d'une ligne sur un compte-titres plutôt que sur un PEA.
+      </div>
+    </div>
+
     <div class="chart-grid" style="margin-bottom:16px">
       <div class="chart-box">
         <div class="chart-title">Top positions (dividendes cumulés)</div>
@@ -389,25 +496,28 @@
     </div>
 
     <div class="intro-box">
-      Définissez une allocation cible par compte (en %). Le moteur calcule les écarts par
-      rapport à l'allocation réelle et propose les mouvements d'achat ou d'allègement
-      nécessaires — par apport de capital ou par arbitrage interne.
+      L'allocation cible se définit <strong>par classe d'actifs</strong>, toutes enveloppes
+      confondues : un PEA peut être investi à 100 % en actions comme dormir en liquidités, si
+      bien qu'une cible « PEA 40 % » décrit une répartition fiscale, pas une allocation.
+      L'apport neuf est affecté en premier aux classes sous-pondérées ; les ventes ne sont
+      proposées qu'ensuite, en commençant par ce qui coûte le moins d'impôt.
     </div>
 
     <div class="cards" id="rbKpis" style="margin-bottom:16px"></div>
 
     <div class="chart-grid" style="margin-bottom:16px">
       <div class="chart-box">
-        <div class="chart-title">Allocation cible par compte (%)</div>
+        <div class="chart-title">Allocation cible par classe d'actifs (%)</div>
         <div id="rbCiblesForm" style="margin-top:4px"></div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:12px;color:var(--muted)">Total des cibles</span>
           <span style="font-size:15px;font-weight:700" id="rbTotalCibles">0 %</span>
         </div>
+        <div class="chart-hint" id="rbCiblesHint" style="color:var(--yellow)"></div>
       </div>
       <div class="chart-box">
         <div class="chart-title">Allocation réelle vs cible</div>
-        <div class="chart-wrap h200"><canvas id="rbChartAlloc" role="img" aria-label="Comparaison allocation réelle vs cible par compte"></canvas></div>
+        <div class="chart-wrap h200"><canvas id="rbChartAlloc" role="img" aria-label="Comparaison de l'allocation réelle et de l'allocation cible, par classe d'actifs"></canvas></div>
       </div>
     </div>
 
@@ -415,31 +525,32 @@
       <div class="chart-title">Paramètres de rééquilibrage</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-top:8px">
         <div>
-          <label class="field-label">Mode de rééquilibrage</label>
-          <select id="rbMode" onchange="rbCalculer()" style="width:100%;padding:8px 10px;font-size:13px">
-            <option value="apport">Apport de capital uniquement</option>
-            <option value="arbitrage">Arbitrage interne (vente + achat)</option>
-            <option value="mixte">Mixte (apport + arbitrage)</option>
-          </select>
-        </div>
-        <div>
           <label class="field-label">Montant d'apport (€)</label>
           <input type="text" id="rbApport" value="0" oninput="rbCalculer()" style="width:100%;padding:8px 10px;font-size:13px">
         </div>
         <div>
-          <label class="field-label">Seuil de déclenchement</label>
-          <select id="rbSeuil" onchange="rbCalculer()" style="width:100%;padding:8px 10px;font-size:13px">
-            <option value="2">2 % d'écart</option>
-            <option value="3">3 % d'écart</option>
-            <option value="5" selected>5 % d'écart</option>
-            <option value="10">10 % d'écart</option>
+          <label class="field-label">Bande de tolérance</label>
+          <select id="rbBande" onchange="rbCalculer()" style="width:100%;padding:8px 10px;font-size:13px">
+            <option value="0.15">15 % de la cible (serrée)</option>
+            <option value="0.25" selected>25 % de la cible (règle 5/25)</option>
+            <option value="0.40">40 % de la cible (large)</option>
           </select>
         </div>
+        <div>
+          <label class="field-label">Ordre minimum (€)</label>
+          <input type="text" id="rbOrdreMin" value="100" oninput="rbCalculer()" style="width:100%;padding:8px 10px;font-size:13px">
+        </div>
+      </div>
+      <div class="chart-hint" style="text-align:left">
+        La bande vaut le plus petit de 5 points ou d'un pourcentage de la cible, avec un
+        plancher d'un point : une cible à 60 % tolère 5 points d'écart, une cible à 5 % en
+        tolère 1,25. Sous l'ordre minimum, l'arbitrage coûte plus en frais qu'il ne rapporte
+        en alignement.
       </div>
     </div>
 
     <div class="chart-box" style="margin-bottom:16px">
-      <div class="chart-title">Analyse des écarts par compte</div>
+      <div class="chart-title">Écarts par classe d'actifs</div>
       <div class="table-wrap" style="border:none;border-radius:0;margin-top:8px">
         <table id="rbTableEcarts" style="width:100%;font-size:13px;border-collapse:collapse"></table>
       </div>
@@ -591,12 +702,29 @@
         <datalist id="fZoneList"></datalist>
       </div>
     </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Classe d'actifs <span class="opt">allocation cible</span></label>
+        <select id="fClasse"></select>
+      </div>
+      <div class="form-group">
+        <label>Sous-jacent suivi <span class="opt">optionnel</span></label>
+        <input type="text" id="fGroupe" placeholder="ex : MSCI World" list="fGroupeList">
+        <datalist id="fGroupeList"></datalist>
+      </div>
+    </div>
     <div class="hint-box">
       💡 <strong>Ticker Yahoo Finance</strong> : cherchez la valeur sur
       <a href="https://finance.yahoo.com" target="_blank" rel="noopener">finance.yahoo.com</a> et reprenez
       le symbole affiché — <code>BN.PA</code> (Danone), <code>MSFT</code> (Microsoft),
       <code>BTC-EUR</code> (Bitcoin), <code>GC=F</code> (once d'or).
       Sans ticker, le cours reste celui que vous saisissez ici.
+    </div>
+    <div class="hint-box">
+      🧭 <strong>Classe d'actifs</strong> : elle pilote l'allocation cible du Rebalancing,
+      toutes enveloppes confondues. <strong>Sous-jacent suivi</strong> : deux fonds portant
+      ce même libellé — deux ETF World logés sur deux comptes, par exemple — sont regroupés
+      en une seule exposition dans l'onglet Analyse, ce qu'ils sont en réalité.
     </div>
     <div class="form-error" id="positionError"></div>
     <div class="modal-footer">

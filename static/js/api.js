@@ -68,6 +68,16 @@ export const api = {
   updateTransaction: (id, p) => put(`${BASE}/api/transactions/${id}`, p),
   deleteTransaction: (id)    => json(`${BASE}/api/transactions/${id}`, { method: 'DELETE' }),
 
+  // ── Analyse et rééquilibrage ──
+  getClasses:       ()     => json(`${BASE}/api/classes`),
+  getAnalyse:       (days) => json(`${BASE}/api/analyse?days=${days}`),
+  getRendements:    ()     => json(`${BASE}/api/rendements`),
+  getRebalancing({ apport = 0, bande = 0.25, ordre_min = 100 } = {}) {
+    const params = new URLSearchParams({ apport, bande, ordre_min });
+    return json(`${BASE}/api/rebalancing?${params}`);
+  },
+  saveCiblesClasses: (cibles) => post(`${BASE}/api/rebalancing/cibles`, { cibles }),
+
   // ── Divers ──
   getBenchmark:     (days) => json(`${BASE}/api/benchmark?days=${days}`),
   getPerformance:   (days) => json(`${BASE}/api/performance?days=${days}`),

@@ -30,11 +30,12 @@ lancement et tout reste sur votre machine.
 | **Vue d'ensemble** | Patrimoine total, variation 24 h, alertes, calendrier fiscal, répartition par compte et par type d'enveloppe, performance, top 10 des positions, faits marquants, répartition sectorielle et géographique |
 | **Mes comptes** | Création, modification et suppression des comptes ; une page par compte avec le détail des positions |
 | **Mouvements** | Journal des achats, ventes, versements, retraits et frais ; prix moyen pondéré et plus-values réalisées qui en découlent |
+| **Analyse** | Volatilité, perte maximale, ratio de Sharpe, concentration et transparisation, exposition aux devises, attribution marché/change et contribution à la performance |
 | **Simulation** | Projection patrimoniale (horizon, rendement, versements mensuels, inflation, scénarios haussier/baissier) |
-| **Dividendes** | Saisie des versements, revenus par mois et par année, top positions, TRI (XIRR) par ligne |
+| **Dividendes** | Saisie des versements, revenus par mois et par année, rendement courant et sur prix de revient, taux de prélèvement effectif, TRI (XIRR) par ligne |
 | **Historique** | Évolution du patrimoine total et par compte, en euros ou en base 100 (TWR), comparée à des indices reconvertis en euros |
 | **Fiscalité** | Règles et simulateur de sortie adaptés au type de chaque compte et à sa date d'ouverture |
-| **Rebalancing** | Allocation cible par compte, écarts, et mouvements d'achat/allègement recommandés |
+| **Rebalancing** | Allocation cible par classe d'actifs, bandes de tolérance, apport affecté en priorité et ordre de vente le moins imposé |
 | **Arbitrage IA** | Analyse du portefeuille par l'API Anthropic (optionnel, clé requise) |
 
 Également : thème clair/sombre, masquage des montants, export CSV, application installable
@@ -73,6 +74,46 @@ moment. Sur une ligne en devise, la différence n'est pas anecdotique : 100 titr
 300 $ quand l'euro valait 1,20 $ ont coûté 25 000 €, pas les 28 571 € qu'un recalcul au
 taux du jour ferait apparaître — soit 19 points de performance escamotés.
 
+### Analyse du risque et de l'allocation
+
+Le dashboard sait dire combien vous avez gagné ; l'onglet *Analyse* dit ce que vous avez
+risqué pour l'obtenir, et d'où vient le gain. Tout est calculé sur des rendements corrigés
+des flux : sans cela, un versement passerait pour une journée exceptionnelle et gonflerait
+à la fois la performance et la volatilité.
+
+| Mesure | Ce qu'elle répond |
+|---|---|
+| **Volatilité annualisée** | Écart-type des rendements quotidiens × √252 — √365 si le portefeuille contient des cryptoactifs, qui cotent en continu |
+| **Perte maximale** | La baisse qu'il a fallu supporter sans vendre, datée, avec sa durée de récupération |
+| **Ratio de Sharpe** | Performance au-delà du taux sans risque, rapportée à la volatilité |
+| **Concentration** | Poids de la première ligne, du top 5, et indice de Herfindahl traduit en « équivalent nombre de lignes équipondérées » |
+| **Transparisation** | Deux fonds suivant le même indice, logés sur deux enveloppes, comptent pour une seule exposition — renseignez le champ « Sous-jacent suivi » |
+| **Exposition aux devises** | Répartition par devise, et part du patrimoine hors zone euro |
+| **Attribution** | Décomposition exacte du gain en effet marché et effet change, rendue possible par le prix de revient figé à l'achat |
+| **Contribution** | Poids de la ligne × sa performance, en points de performance du portefeuille ; la somme égale la performance globale, ce qui la rend vérifiable |
+
+### Allocation cible et rééquilibrage
+
+L'allocation se pilote **par classe d'actifs** (actions, obligations, monétaire, immobilier,
+or, cryptoactifs), toutes enveloppes confondues : un PEA peut être investi à 100 % en actions
+comme dormir en liquidités, si bien qu'une cible « PEA 40 % » décrit une répartition fiscale
+et non une allocation. La répartition par enveloppe reste consultable, pour ce qu'elle dit
+réellement — l'exposition fiscale.
+
+Trois règles encadrent les mouvements proposés :
+
+- **Bandes de tolérance** — une classe dérive quand elle s'écarte de 5 points de sa cible
+  *ou* de 25 % de celle-ci, soit la plus petite des deux, avec un plancher d'un point. Un
+  seuil unique en points traiterait de la même façon une cible à 5 % et une cible à 60 %.
+- **L'apport d'abord** — le capital neuf est affecté aux classes sous-pondérées avant toute
+  vente. Les ventes ne portent que sur ce que l'apport ne couvre pas.
+- **L'ordre de vente le moins imposé** — les moins-values d'abord, puis les lignes logées
+  dans une enveloppe où l'arbitrage est neutre (PEA, assurance vie, PER), puis les plus
+  faibles plus-values imposables. L'impôt estimé est affiché ligne par ligne.
+
+Un montant minimum d'ordre évite les micro-arbitrages qui coûtent plus en frais qu'ils ne
+rapportent en alignement.
+
 ### Alertes et calendrier fiscal
 
 La vue d'ensemble signale ce qui demande une décision, à partir des seules données déjà
@@ -81,7 +122,7 @@ saisies :
 | Alerte | Déclenchement |
 |---|---|
 | Cap fiscal | 90 jours avant et après le seuil du compte (5 ans PEA, 8 ans assurance vie, 22 ans métaux), daté à partir de la date d'ouverture |
-| Dérive d'allocation | Écart d'au moins 5 points entre l'allocation réelle et la cible du rebalancing |
+| Dérive d'allocation | Classe d'actifs sortie de sa bande de tolérance (5 points ou 25 % de la cible, au plus petit) |
 | Taux de change non confirmé | Position en devise étrangère encore valorisée 1:1 avec l'euro, faute de taux récupéré |
 | Ticker muet | Aucun cours jamais récupéré — le plus souvent une faute de frappe dans le ticker |
 | Cours figé | Dernier cours obtenu il y a plus de 5 jours : titre suspendu, radié ou ticker devenu invalide |
@@ -348,6 +389,11 @@ autre client peut donc piloter le dashboard de la même façon.
 | `PUT` `DELETE` | `/api/transactions/<id>` | Modification et suppression, avec recalcul du PMP |
 | `GET` | `/api/plus-values` | Plus-values réalisées reconstituées depuis le journal |
 | `GET` | `/api/performance?days=` | TWR en base 100 et TRI du portefeuille |
+| `GET` | `/api/classes` | Catalogue des classes d'actifs et répartition courante |
+| `GET` | `/api/analyse?days=` | Risque, concentration, devises, attribution et contributions |
+| `GET` | `/api/rendements` | Rendements des dividendes, par ligne et globaux |
+| `GET` | `/api/rebalancing?apport=&bande=&ordre_min=` | Écarts par classe et mouvements recommandés |
+| `POST` | `/api/rebalancing/cibles` | Allocation cible par classe d'actifs |
 | `GET` | `/api/tri?nom=&account_id=` | TRI d'une position, calculé sur ses flux datés |
 | `GET` | `/api/benchmark?days=` | Indices reconvertis en euros, en base 100 et en valeur |
 | `GET` | `/api/export/csv` | Export du portefeuille |
@@ -367,6 +413,8 @@ Dashboard-FI-pub/
 │   ├── positions.py           # CRUD des positions, calculs, historique
 │   ├── transactions.py        # Journal, prix moyen pondéré, plus-values réalisées
 │   ├── performance.py         # Flux datés, TWR et TRI (XIRR)
+│   ├── analyse.py             # Risque, concentration, devises, contributions
+│   ├── rebalancing.py         # Allocation cible par classe et ordre d'arbitrage
 │   ├── quotes.py              # Cours, taux de change et divisions de titres (yfinance)
 │   ├── stats.py               # Agrégats
 │   ├── dividendes.py          # Dividendes encaissés
@@ -405,6 +453,8 @@ positions, historique et dividendes s'y rattachent par `account_id`. Ajouter un 
 d'enveloppe se fait donc dans `catalog.py`, sans migration.
 
 ```
+allocations_classes            (cible par classe d'actifs, hors enveloppes)
+
 accounts ──┬── positions ──── price_history
            ├── transactions ──── (position_id : achats et ventes)
            ├── dividendes

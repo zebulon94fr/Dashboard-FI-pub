@@ -1,6 +1,6 @@
 import { Store, typeInfo, comptes, compteById } from './state.js';
 import { api } from './api.js';
-import { fmt, esc, kpiCard, badgeType, destroyChart, makeChart, parseNum, fmtChart } from './core.js';
+import { fmt, cls, esc, kpiCard, badgeType, destroyChart, makeChart, parseNum, fmtChart } from './core.js';
 import { chartColors } from './theme.js';
 
 let dividendeEnEdition = null;
@@ -166,6 +166,8 @@ export async function loadDividendes() {
     });
   }
 
+  renderRendements();
+
   // ── Top positions ──
   const th = 'style="padding:6px 10px;text-align:left;color:var(--muted);font-size:11px;border-bottom:1px solid var(--border)"';
   const td = 'style="padding:6px 10px;border-bottom:1px solid var(--border)"';
@@ -187,13 +189,18 @@ export async function loadDividendes() {
   } else {
     triDiv.innerHTML = '<span class="muted">Calcul en cours…</span>';
     const resultats = await Promise.all(top.map(async p => {
-      try { return { nom: p.nom, tri: (await api.getTri(p.nom, p.account_id)).tri }; }
-      catch { return { nom: p.nom, tri: null }; }
+      try {
+        const r = await api.getTri(p.nom, p.account_id);
+        return { nom: p.nom, tri: r.tri, message: r.message };
+      } catch (e) {
+        return { nom: p.nom, tri: null, message: e.message };
+      }
     }));
     triDiv.innerHTML = resultats.map(t => `
       <div class="tri-row">
         <span>${esc(t.nom.length > 30 ? t.nom.slice(0, 30) + '…' : t.nom)}</span>
-        <span class="${t.tri == null ? 'neu' : t.tri >= 0 ? 'pos' : 'neg'}" style="font-weight:700">
+        <span class="${t.tri == null ? 'neu' : t.tri >= 0 ? 'pos' : 'neg'}" style="font-weight:700"
+              title="${esc(t.message || '')}">
           ${t.tri == null ? '—' : (t.tri >= 0 ? '+' : '') + t.tri.toFixed(2) + '% TRI'}
         </span>
       </div>`).join('');
@@ -221,4 +228,64 @@ export async function loadDividendes() {
     </tr></thead><tbody>${lignes || `
       <tr><td colspan="7" class="table-empty">Aucun dividende enregistré — cliquez sur « + Dividende ».</td></tr>`}
     </tbody>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// RENDEMENTS
+// ══════════════════════════════════════════════════════════════
+const pct = (v, d = 2) => v == null ? '—' : (v * 100).toFixed(d).replace('.', ',') + ' %';
+
+/**
+ * Rendement courant, rendement sur prix de revient et taux de prélèvement.
+ *
+ * Additionner des versements ne dit rien tant qu'on ne les rapporte pas à un
+ * capital : ces trois rapports répondent à trois questions différentes.
+ */
+async function renderRendements() {
+  const zone = el('divRendements');
+  if (!zone) return;
+
+  let d;
+  try {
+    d = await api.getRendements();
+  } catch (e) {
+    zone.innerHTML = `<tbody><tr><td class="table-empty">${esc(e.message)}</td></tr></tbody>`;
+    return;
+  }
+
+  const t = d.total || {};
+  el('divRendementsKpis').innerHTML =
+    kpiCard('Revenus 12 mois', fmt(t.ttm_brut || 0),
+      `${(t.mensuel_moyen || 0).toLocaleString('fr-FR')} € par mois en moyenne`, 'neu') +
+    kpiCard('Rendement courant', pct(t.rendement_courant), 'sur la valorisation', 'neu') +
+    kpiCard('Sur prix de revient', pct(t.rendement_sur_revient), 'sur ce qui a été payé',
+      cls(t.rendement_sur_revient)) +
+    kpiCard('Croissance', pct(t.croissance, 1), 'contre les 12 mois précédents', cls(t.croissance));
+
+  if (!d.lignes?.length) {
+    zone.innerHTML = '<tbody><tr><td class="table-empty">Aucun dividende enregistré sur 12 mois.</td></tr></tbody>';
+    return;
+  }
+
+  const th = 'style="padding:6px 10px;text-align:left;color:var(--muted);font-size:11px;border-bottom:1px solid var(--border)"';
+  const td = 'style="padding:6px 10px;border-bottom:1px solid var(--border)"';
+
+  zone.innerHTML = `<thead><tr>
+      <th ${th}>Position</th><th ${th}>Compte</th>
+      <th ${th} style="text-align:right">Perçu 12 mois</th>
+      <th ${th} style="text-align:right">Rendement courant</th>
+      <th ${th} style="text-align:right">Sur prix de revient</th>
+      <th ${th} style="text-align:right">Prélèvement</th>
+      <th ${th} style="text-align:right">Croissance</th>
+    </tr></thead><tbody>` +
+    d.lignes.map(l => `<tr>
+      <td ${td}>${esc(l.nom)}${l.position_connue ? '' :
+        ' <span class="tag tag-mini" title="Aucune position de ce nom : le rendement ne peut pas être calculé">orpheline</span>'}</td>
+      <td ${td}>${badgeType(l.compte_type)} ${esc(l.compte || '')}</td>
+      <td ${td} style="text-align:right" class="pos">${fmt(l.ttm_brut)}</td>
+      <td ${td} style="text-align:right;font-weight:600">${pct(l.rendement_courant)}</td>
+      <td ${td} style="text-align:right;font-weight:600" class="${cls(l.rendement_sur_revient)}">${pct(l.rendement_sur_revient)}</td>
+      <td ${td} style="text-align:right" class="${l.taux_prelevement ? 'neg' : 'muted'}">${pct(l.taux_prelevement, 1)}</td>
+      <td ${td} style="text-align:right" class="${cls(l.croissance)}">${pct(l.croissance, 1)}</td>
+    </tr>`).join('') + '</tbody>';
 }

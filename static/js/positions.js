@@ -4,6 +4,12 @@ import { reload, esc, parseNum, showAccount } from './core.js';
 
 let positionEnEdition = null;   // id de la position modifiée, null en création
 
+// Miroir de catalog.CLASSE_PAR_DEFAUT, pour proposer une classe sans aller-retour serveur.
+const CLASSE_PAR_ENVELOPPE = {
+  pea: 'actions', cto: 'actions', per: 'actions',
+  av: 'obligations', metaux: 'or', crypto: 'crypto',
+};
+
 export function positionById(id) {
   for (const compte of comptes()) {
     const position = (compte.positions || []).find(p => p.id === Number(id));
@@ -55,9 +61,15 @@ export function openPositionModal(positionId = null) {
   el('fSecteur').value = position?.secteur || '';
   el('fZone').value    = position?.zone || '';
   el('fTaux').value    = position?.devise && position.devise !== 'EUR' ? position.taux_change : '';
+  el('fGroupe').value  = position?.groupe || '';
+
+  el('fClasse').innerHTML = (Store.CLASSES || [])
+    .map(c => `<option value="${c.id}">${esc(c.label)}</option>`).join('');
+  remplirDatalist('fGroupeList', valeursConnues('groupe'));
 
   remplirDatalist('fSecteurList', valeursConnues('secteur'));
   remplirDatalist('fZoneList', valeursConnues('zone'));
+  if (position?.classe) el('fClasse').value = position.classe;
 
   onPositionAccountChange(position?.devise);
   el('posModal').classList.add('open');
@@ -77,6 +89,11 @@ export function onPositionAccountChange(deviseForcee = null) {
     : valeursConnues('nom'));
 
   el('fQtyLabel').textContent = `Quantité (${t.unite})`;
+  // À la création, la classe d'actifs suit le type d'enveloppe : un point de
+  // départ raisonnable, que l'on reste libre de corriger.
+  if (!positionEnEdition && el('fClasse').options.length) {
+    el('fClasse').value = CLASSE_PAR_ENVELOPPE[compte?.type] || 'autre';
+  }
   onPositionDeviseChange();
 }
 
@@ -106,6 +123,8 @@ export async function savePosition() {
     pru: parseNum(el('fPru').value),
     cours: parseNum(el('fCours').value),
     devise: el('fDevise').value,
+    classe: el('fClasse').value,
+    groupe: el('fGroupe').value.trim(),
     taux_change: el('fTaux').value.trim() ? parseNum(el('fTaux').value) : null,
   };
 

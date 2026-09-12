@@ -3,8 +3,9 @@ import datetime
 
 from backend.accounts import list_accounts
 from backend.db import get_db
+from catalog import CLASSES_ACTIFS, ORDRE_CLASSES, classe_par_defaut
 
-CHAMPS = ("nom", "ticker", "isin", "secteur", "zone",
+CHAMPS = ("nom", "ticker", "isin", "secteur", "zone", "classe", "groupe",
           "quantite", "pru", "cours", "devise")
 
 
@@ -102,10 +103,17 @@ def _valide(payload, partiel=False):
             raise PositionError("Le nom de la position est obligatoire.")
         out["nom"] = nom[:120]
 
-    for champ in ("ticker", "isin", "secteur", "zone"):
+    for champ in ("ticker", "isin", "secteur", "zone", "groupe"):
         if champ in payload:
             valeur = (payload.get(champ) or "").strip()[:60]
             out[champ] = valeur.upper() if champ in ("ticker", "isin") else valeur
+
+    if "classe" in payload:
+        classe = (payload.get("classe") or "").strip().lower()
+        if classe and classe not in CLASSES_ACTIFS:
+            attendues = ", ".join(ORDRE_CLASSES)
+            raise PositionError(f"Classe d'actifs inconnue : « {classe} ». Valeurs acceptées : {attendues}.")
+        out["classe"] = classe
 
     for champ in ("quantite", "pru", "cours"):
         if not partiel or champ in payload:
@@ -180,9 +188,13 @@ def load_portfolio(jours_historique=365):
 def create_position(account_id, payload):
     champs = _valide(payload)
     with get_db() as db:
-        compte = db.execute("SELECT id FROM accounts WHERE id=?", (account_id,)).fetchone()
+        compte = db.execute("SELECT id, type FROM accounts WHERE id=?", (account_id,)).fetchone()
         if not compte:
             raise PositionError("Compte introuvable — créez d'abord un compte.")
+        # Sans classe saisie, celle qu'appelle le type d'enveloppe : mieux vaut
+        # un classement par défaut discutable qu'un portefeuille « non classé ».
+        if not champs.get("classe"):
+            champs["classe"] = classe_par_defaut(compte["type"])
         taux = resoudre_taux(db, champs["devise"], payload.get("taux_change"))
         # Sans journal de mouvements, le prix de revient reste estimé au taux
         # du jour : c'est le journal qui le fige (voir transactions.py).
@@ -190,12 +202,14 @@ def create_position(account_id, payload):
         valo, pv, pct = calculs(champs["quantite"], champs["pru"], champs["cours"], taux, cout_eur)
         cur = db.execute("""
             INSERT INTO positions
-              (account_id, nom, ticker, isin, secteur, zone, quantite, pru, cours,
-               devise, taux_change, cout_eur, valorisation, pv_latent, pv_pct)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+              (account_id, nom, ticker, isin, secteur, zone, classe, groupe,
+               quantite, pru, cours, devise, taux_change, cout_eur,
+               valorisation, pv_latent, pv_pct)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             account_id, champs["nom"], champs.get("ticker", ""), champs.get("isin", ""),
             champs.get("secteur", ""), champs.get("zone", ""),
+            champs.get("classe", ""), champs.get("groupe", ""),
             champs["quantite"], champs["pru"], champs["cours"],
             champs["devise"], taux, cout_eur, valo, pv, pct,
         ))
@@ -217,12 +231,14 @@ def update_position(position_id, payload):
 
         db.execute("""
             UPDATE positions SET
-              nom=?, ticker=?, isin=?, secteur=?, zone=?, quantite=?, pru=?, cours=?,
+              nom=?, ticker=?, isin=?, secteur=?, zone=?, classe=?, groupe=?,
+              quantite=?, pru=?, cours=?,
               devise=?, taux_change=?, valorisation=?, pv_latent=?, pv_pct=?,
               updated_at=datetime('now')
             WHERE id=?
         """, (
             fusion["nom"], fusion["ticker"], fusion["isin"], fusion["secteur"], fusion["zone"],
+            fusion.get("classe") or "", fusion.get("groupe") or "",
             fusion["quantite"], fusion["pru"], fusion["cours"],
             fusion["devise"], taux, valo, pv, pct, position_id,
         ))

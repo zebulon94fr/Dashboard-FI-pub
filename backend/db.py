@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS positions (
     isin         TEXT    DEFAULT '',
     secteur      TEXT    DEFAULT '',              -- libre — alimente le graphique sectoriel
     zone         TEXT    DEFAULT '',              -- libre — alimente le graphique géographique
+    classe       TEXT    DEFAULT '',              -- classe d'actifs (catalog.CLASSES_ACTIFS)
+    groupe       TEXT    DEFAULT '',              -- sous-jacent commun, pour la transparisation
     quantite     REAL    DEFAULT 0,
     pru          REAL    DEFAULT 0,
     cours        REAL    DEFAULT 0,
@@ -120,6 +122,14 @@ CREATE TABLE IF NOT EXISTS dividendes (
     created_at  TEXT    DEFAULT (datetime('now'))
 );
 
+-- ── Allocation cible par classe d'actifs ────────────────────────────────────
+-- Pilotée toutes enveloppes confondues : une classe d'actifs traverse les
+-- comptes, là où `accounts.cible_pct` ne décrit qu'une répartition fiscale.
+CREATE TABLE IF NOT EXISTS allocations_classes (
+    classe     TEXT PRIMARY KEY,
+    cible_pct  REAL DEFAULT 0
+);
+
 -- ── Index ───────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_positions_account   ON positions(account_id);
 CREATE INDEX IF NOT EXISTS idx_price_history_pos   ON price_history(position_id, ts);
@@ -135,6 +145,8 @@ CREATE INDEX IF NOT EXISTS idx_tx_account          ON transactions(account_id, d
 # faire « ADD COLUMN IF NOT EXISTS » : on regarde la table avant d'écrire.
 MIGRATIONS = [
     ("positions", "cout_eur", "REAL DEFAULT NULL"),
+    ("positions", "classe", "TEXT DEFAULT ''"),
+    ("positions", "groupe", "TEXT DEFAULT ''"),
 ]
 
 

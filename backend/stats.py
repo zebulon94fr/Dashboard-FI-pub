@@ -92,6 +92,20 @@ def get_stats():
             "SELECT COUNT(*) n FROM history_intraday WHERE account_id = 0"
         ).fetchone()
 
+    # Dérive de l'allocation cible, calculée là où vivent les cibles — par
+    # classe d'actifs, et non par enveloppe (voir backend/rebalancing.py).
+    from backend.rebalancing import get_rebalancing
+    rb = get_rebalancing()
+    derive_classes = {
+        "cibles_definies": rb["total_cibles"] > 0,
+        "cibles_valides": rb["cibles_valides"],
+        "total_cibles": rb["total_cibles"],
+        "hors_bande": [
+            {"label": c["label"], "ecart_pts": c["ecart_pts"], "statut": c["statut"]}
+            for c in rb["classes"] if c["hors_bande"]
+        ],
+    }
+
     maintenant = perf_24h["now_total"] if perf_24h else None
     precedent = perf_24h["prev_total"] if perf_24h else None
     var24h = round(maintenant - precedent, 2) if maintenant and precedent else None
@@ -121,5 +135,6 @@ def get_stats():
         "best_day": dict(best_day) if best_day else None,
         "worst_day": dict(worst_day) if worst_day else None,
         "stale": [dict(r) for r in stale],
+        "derive_classes": derive_classes,
         "snap_count": snap_count["n"] if snap_count else 0,
     }

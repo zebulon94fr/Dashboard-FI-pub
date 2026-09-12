@@ -7,6 +7,7 @@ Usage :
   python scripts/demo_data.py            # ajoute les comptes de démonstration
   python scripts/demo_data.py --reset    # supprime d'abord tous les comptes existants
 """
+import datetime
 import sys
 from pathlib import Path
 
@@ -15,6 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from backend.accounts import create_account, list_accounts, delete_account  # noqa: E402
 from backend.db import get_db, init_db  # noqa: E402
 from backend.positions import create_position, load_portfolio, record_history  # noqa: E402
+from backend.dividendes import add_dividende  # noqa: E402
+from backend.rebalancing import save_cibles_classes  # noqa: E402
 from backend.transactions import add_transaction  # noqa: E402
 
 COMPTES = [
@@ -22,47 +25,47 @@ COMPTES = [
         "compte": {"nom": "PEA", "type": "pea", "etablissement": "Courtier en ligne",
                    "date_ouverture": "2018-03-15", "cible_pct": 35},
         "positions": [
-            {"nom": "Danone", "ticker": "BN.PA", "isin": "FR0000120644", "secteur": "Consommation", "zone": "Europe", "quantite": 25, "pru": 58.20, "cours": 68.40},
-            {"nom": "Michelin", "ticker": "ML.PA", "isin": "FR001400AJ45", "secteur": "Industrie", "zone": "Europe", "quantite": 40, "pru": 28.10, "cours": 34.35},
-            {"nom": "ETF MSCI World", "ticker": "IWDA.AS", "secteur": "ETF diversifié", "zone": "Monde", "quantite": 120, "pru": 78.30, "cours": 96.10},
+            {"nom": "Danone", "ticker": "BN.PA", "isin": "FR0000120644", "secteur": "Consommation", "zone": "Europe", "classe": "actions", "quantite": 25, "pru": 58.20, "cours": 68.40},
+            {"nom": "Michelin", "ticker": "ML.PA", "isin": "FR001400AJ45", "secteur": "Industrie", "zone": "Europe", "classe": "actions", "quantite": 40, "pru": 28.10, "cours": 34.35},
+            {"nom": "ETF MSCI World", "ticker": "IWDA.AS", "secteur": "ETF diversifié", "zone": "Monde", "classe": "actions", "groupe": "MSCI World", "quantite": 120, "pru": 78.30, "cours": 96.10},
         ],
     },
     {
         "compte": {"nom": "Compte-titres", "type": "cto", "etablissement": "Courtier international",
                    "date_ouverture": "2021-06-01", "cible_pct": 20},
         "positions": [
-            {"nom": "Microsoft", "ticker": "MSFT", "secteur": "Technologie", "zone": "États-Unis", "quantite": 12, "pru": 310.00, "cours": 425.50, "devise": "USD", "taux_change": 0.9238},
-            {"nom": "Johnson & Johnson", "ticker": "JNJ", "secteur": "Santé", "zone": "États-Unis", "quantite": 15, "pru": 152.00, "cours": 163.40, "devise": "USD", "taux_change": 0.9238},
+            {"nom": "Microsoft", "ticker": "MSFT", "secteur": "Technologie", "zone": "États-Unis", "classe": "actions", "quantite": 12, "pru": 310.00, "cours": 425.50, "devise": "USD", "taux_change": 0.9238},
+            {"nom": "Johnson & Johnson", "ticker": "JNJ", "secteur": "Santé", "zone": "États-Unis", "classe": "actions", "quantite": 15, "pru": 152.00, "cours": 163.40, "devise": "USD", "taux_change": 0.9238},
         ],
     },
     {
         "compte": {"nom": "Assurance vie", "type": "av", "etablissement": "Assureur",
                    "date_ouverture": "2019-11-04", "cible_pct": 20},
         "positions": [
-            {"nom": "Fonds euros", "secteur": "Fonds euros", "zone": "Europe", "quantite": 1, "pru": 18000, "cours": 19450},
-            {"nom": "ETF actions monde", "ticker": "IWDA.AS", "secteur": "ETF diversifié", "zone": "Monde", "quantite": 45, "pru": 78.30, "cours": 96.10},
+            {"nom": "Fonds euros", "secteur": "Fonds euros", "zone": "Europe", "classe": "obligations", "quantite": 1, "pru": 18000, "cours": 19450},
+            {"nom": "ETF actions monde", "ticker": "IWDA.AS", "secteur": "ETF diversifié", "zone": "Monde", "classe": "actions", "groupe": "MSCI World", "quantite": 45, "pru": 78.30, "cours": 96.10},
         ],
     },
     {
         "compte": {"nom": "PER individuel", "type": "per", "etablissement": "Gestionnaire",
                    "date_ouverture": "2022-01-10", "cible_pct": 15},
         "positions": [
-            {"nom": "Fonds actions Europe", "secteur": "Actions Europe", "zone": "Europe", "quantite": 120, "pru": 52.40, "cours": 58.90},
+            {"nom": "Fonds actions Europe", "secteur": "Actions Europe", "zone": "Europe", "classe": "actions", "quantite": 120, "pru": 52.40, "cours": 58.90},
         ],
     },
     {
         "compte": {"nom": "Cryptomonnaies", "type": "crypto", "etablissement": "Plateforme d'échange",
                    "date_ouverture": "2023-02-20", "cible_pct": 5},
         "positions": [
-            {"nom": "Bitcoin", "ticker": "BTC-EUR", "secteur": "Actifs numériques", "zone": "Décentralisé", "quantite": 0.085, "pru": 32000, "cours": 61500},
-            {"nom": "Ethereum", "ticker": "ETH-EUR", "secteur": "Actifs numériques", "zone": "Décentralisé", "quantite": 1.4, "pru": 1850, "cours": 2740},
+            {"nom": "Bitcoin", "ticker": "BTC-EUR", "secteur": "Actifs numériques", "zone": "Décentralisé", "classe": "crypto", "quantite": 0.085, "pru": 32000, "cours": 61500},
+            {"nom": "Ethereum", "ticker": "ETH-EUR", "secteur": "Actifs numériques", "zone": "Décentralisé", "classe": "crypto", "quantite": 1.4, "pru": 1850, "cours": 2740},
         ],
     },
     {
         "compte": {"nom": "Métaux précieux", "type": "metaux", "etablissement": "Coffre",
                    "date_ouverture": "2020-09-12", "cible_pct": 5},
         "positions": [
-            {"nom": "Or", "ticker": "GC=F", "secteur": "Métaux précieux", "zone": "Monde", "quantite": 3, "pru": 1720, "cours": 2380, "devise": "USD", "taux_change": 0.9238},
+            {"nom": "Or", "ticker": "GC=F", "secteur": "Métaux précieux", "zone": "Monde", "classe": "or", "quantite": 3, "pru": 1720, "cours": 2380, "devise": "USD", "taux_change": 0.9238},
         ],
     },
 ]
@@ -92,6 +95,38 @@ MOUVEMENTS = [
 ]
 
 
+# Deux ans de dividendes, pour que les rendements de l'onglet Dividendes aient
+# de quoi se calculer : 12 mois glissants comparés aux 12 précédents.
+DIVIDENDES = [
+    ("PEA", "Danone", [(30, 51.0, 51.0), (120, 49.5, 49.5), (210, 48.0, 48.0),
+                       (300, 47.0, 47.0), (395, 45.5, 45.5), (480, 44.0, 44.0)]),
+    ("PEA", "Michelin", [(75, 52.0, 52.0), (440, 48.0, 48.0)]),
+    ("Compte-titres", "Microsoft", [(35, 9.6, 6.7), (125, 9.4, 6.6),
+                                    (215, 9.0, 6.3), (305, 8.8, 6.2),
+                                    (400, 8.4, 5.9), (490, 8.0, 5.6)]),
+    ("Compte-titres", "Johnson & Johnson", [(60, 18.5, 12.9), (150, 18.5, 12.9),
+                                            (245, 17.8, 12.5), (425, 17.0, 11.9)]),
+]
+
+
+def creer_dividendes(comptes_par_nom):
+    """Versements de démonstration, datés en jours avant aujourd'hui."""
+    aujourdhui = datetime.date.today()
+    cree = 0
+    for nom_compte, nom_position, versements in DIVIDENDES:
+        compte = comptes_par_nom.get(nom_compte)
+        if not compte:
+            continue
+        for jours, brut, net in versements:
+            add_dividende({
+                "date": (aujourdhui - datetime.timedelta(days=jours)).isoformat(),
+                "account_id": compte["id"], "nom": nom_position,
+                "montant": brut, "montant_net": net,
+            })
+            cree += 1
+    return cree
+
+
 def creer_mouvements(comptes_par_nom):
     """Alimente le journal, d'où sont recalculés PMP et prix de revient."""
     cree = 0
@@ -118,6 +153,7 @@ def reset():
         db.execute("DELETE FROM history_intraday")
         db.execute("DELETE FROM dividendes")
         db.execute("DELETE FROM transactions")
+        db.execute("DELETE FROM allocations_classes")
     print("Comptes existants supprimés.")
 
 
@@ -137,6 +173,10 @@ def main():
 
     comptes_par_nom = {c["nom"]: c for c in load_portfolio()["accounts"]}
     print(f"  Journal : {creer_mouvements(comptes_par_nom)} mouvement(s)")
+    print(f"  Dividendes : {creer_dividendes(comptes_par_nom)} versement(s)")
+
+    save_cibles_classes({"actions": 60, "obligations": 25, "or": 10, "crypto": 5})
+    print("  Allocation cible : actions 60 %, obligations 25 %, or 10 %, crypto 5 %")
 
     record_history()
     print("\nPortefeuille de démonstration créé (données fictives).")

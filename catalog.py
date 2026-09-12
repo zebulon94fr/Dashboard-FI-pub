@@ -212,6 +212,34 @@ TYPES_TRANSACTION = {
 
 ORDRE_TRANSACTIONS = ["achat", "vente", "versement", "retrait", "frais"]
 
+# ── Classes d'actifs ────────────────────────────────────────────────────────
+# Une enveloppe n'est pas une classe d'actifs : un PEA peut être investi à 100 %
+# en actions comme dormir en liquidités. L'allocation cible se pilote donc sur
+# cet axe, toutes enveloppes confondues, et la répartition par enveloppe reste
+# une vue secondaire — utile, mais fiscale plutôt qu'allocataire.
+# Les teintes reprennent celles que l'application emploie déjà pour les mêmes
+# actifs (métaux en or, cryptoactifs en turquoise), pour que le graphique des
+# classes et celui des enveloppes ne se contredisent pas. Seul « Non classé »
+# reste neutre : c'est la catégorie vide, comme « Non renseigné » ailleurs.
+CLASSES_ACTIFS = {
+    "actions":    {"label": "Actions",        "couleur": "#58a6ff", "volatilite": 0.17},
+    "obligations": {"label": "Obligations",   "couleur": "#3fb950", "volatilite": 0.06},
+    "monetaire":  {"label": "Monétaire",      "couleur": "#bc8cff", "volatilite": 0.01},
+    "immobilier": {"label": "Immobilier",     "couleur": "#f0883e", "volatilite": 0.12},
+    "or":         {"label": "Or et métaux",   "couleur": "#f5c518", "volatilite": 0.15},
+    "crypto":     {"label": "Cryptoactifs",   "couleur": "#2dd4bf", "volatilite": 0.60},
+    "autre":      {"label": "Non classé",     "couleur": "#6e7681", "volatilite": 0.15},
+}
+
+ORDRE_CLASSES = ["actions", "obligations", "monetaire", "immobilier", "or", "crypto", "autre"]
+
+# Classe proposée par défaut selon le type d'enveloppe, à la création d'une
+# position. Un simple point de départ : l'utilisateur reste libre de la changer.
+CLASSE_PAR_DEFAUT = {
+    "pea": "actions", "cto": "actions", "per": "actions",
+    "av": "obligations", "metaux": "or", "crypto": "crypto",
+}
+
 # ── Catalogues de tickers Yahoo Finance ─────────────────────────────────────
 # Proposés en autocomplétion à la saisie d'une position ; l'utilisateur reste
 # libre de saisir n'importe quel autre ticker.
@@ -292,3 +320,13 @@ def public_types():
 def public_transaction_types():
     """Types de mouvement envoyés au frontend, dans l'ordre d'affichage."""
     return [{"id": tid, **TYPES_TRANSACTION[tid]} for tid in ORDRE_TRANSACTIONS]
+
+
+def public_classes():
+    """Classes d'actifs envoyées au frontend, dans l'ordre d'affichage."""
+    return [{"id": cid, **CLASSES_ACTIFS[cid]} for cid in ORDRE_CLASSES]
+
+
+def classe_par_defaut(type_compte):
+    """Classe proposée pour une position, d'après le type de son enveloppe."""
+    return CLASSE_PAR_DEFAUT.get(type_compte, "autre")

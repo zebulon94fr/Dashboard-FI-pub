@@ -24,6 +24,7 @@ import { setPeriod, loadBenchmark, renderHistory, toggleBenchmark, setBenchmarkM
 import { setSimReturn, simUpdate } from './simulation.js';
 import { showFiscTab, renderFiscalite, calcFisc } from './fiscalite.js';
 import { rbSliderChange, rbSauvegarderCibles, rbCalculer } from './rebalancing.js';
+import { loadAnalyse, setAnalysePeriod } from './analyse.js';
 import { saveKey, analyzeIA } from './ia.js';
 
 // ══════════════════════════════════════════════════════════════
@@ -89,6 +90,7 @@ async function init() {
     Store.TYPES = Object.fromEntries(Store.TYPES_LIST.map(t => [t.id, t]));
     Store.DEVISES = referentiel.devises || ['EUR'];
     Store.TX_TYPES = (await api.getTransactionTypes()).types || [];
+    Store.CLASSES = (await api.getClasses()).catalogue || [];
   } catch (e) {
     setQuoteStatus('error', 'Serveur injoignable');
     console.error('Référentiel :', e.message);
@@ -139,6 +141,7 @@ Object.assign(window, {
   setSimReturn, simUpdate,
   showFiscTab, renderFiscalite, calcFisc,
   rbSliderChange, rbSauvegarderCibles, rbCalculer,
+  loadAnalyse, setAnalysePeriod,
   saveKey, analyzeIA,
 });
 

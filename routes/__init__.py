@@ -1,5 +1,6 @@
 """Enregistrement de tous les blueprints Flask."""
 from routes.accounts import bp as accounts_bp
+from routes.analyse import bp as analyse_bp
 from routes.benchmark import bp as benchmark_bp
 from routes.claude import bp as claude_bp
 from routes.data import bp as data_bp
@@ -16,5 +17,5 @@ from routes.transactions import bp as transactions_bp
 def register_blueprints(app):
     for bp in (accounts_bp, positions_bp, data_bp, stats_bp, dividendes_bp,
                quotes_bp, benchmark_bp, settings_bp, claude_bp, export_bp,
-               telegram_bp, transactions_bp):
+               telegram_bp, transactions_bp, analyse_bp):
         app.register_blueprint(bp)
