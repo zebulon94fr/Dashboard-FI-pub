@@ -107,6 +107,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent)
 .card-value{font-size:22px;font-weight:700;color:var(--text)}
 .card-sub{font-size:12px;margin-top:4px}
 .pos{color:var(--green)}.neg{color:var(--red)}.neu{color:var(--muted)}
+.attention{color:var(--yellow)}
 
 /* ── Alertes de la vue d'ensemble ── */
 .alert-list{display:grid;gap:8px}

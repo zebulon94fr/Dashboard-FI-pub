@@ -44,8 +44,11 @@ INDICES_COLONNES = {
                  "isin", "code isin"),
     "quantite": ("quantite", "qte", "nombre de parts", "nombre", "quantity", "shares",
                  "nb titres"),
-    "prix":     ("prix unitaire", "cours unitaire", "px un brut", "px un",
-                 "prix d execution", "prix", "cours", "price"),
+    # « cours » avant « px un brut » : sur un relevé Bourse Direct, le prix
+    # unitaire d'une transaction est dans COURS, et PX UN.BRUT ne porte que le
+    # dividende par titre — vide sur les achats et les ventes.
+    "prix":     ("prix unitaire", "cours unitaire", "prix d execution", "cours",
+                 "prix", "price", "px un brut", "px un"),
     "devise":   ("devise", "currency", "monnaie"),
     "frais":    ("frais de courtage", "frais", "commission", "courtage", "fee", "fees"),
     "montant":  ("montant net", "montant brut", "montant total", "montant", "brut",
@@ -61,9 +64,12 @@ INDICES_TYPES = {
     "vente":     ("vente", "vendu", "cession", "sell", "sale", "liquidation"),
     "retrait":   ("retrait", "rachat", "withdrawal", "sortie", "desinvestissement"),
     "achat":     ("achat", "achete", "acquisition", "souscription", "buy", "purchase"),
-    "versement": ("versement", "virement", "depot", "deposit", "apport", "alimentation",
-                  "contribution"),
-    "frais":     ("frais", "commission", "droits de garde", "fee", "charge"),
+    "versement": ("versement", "virement", "depot", "deposit", "apport",
+                  "alimentation", "contribution", "investissement"),
+    # La taxe sur les transactions financières est un frais comme un autre du
+    # point de vue du journal : de l'argent qui sort, daté.
+    "frais":     ("frais", "commission", "droits de garde", "droits", "taxe", "taxes",
+                  "impot", "impots", "fee", "charge"),
     # Un dividende n'est pas un mouvement du journal : il a sa propre table, et
     # l'import l'y dirige plutôt que de le refuser ou d'en faire un versement.
     "dividende": ("coupon", "coupons", "dividende", "dividend", "interets",
@@ -147,26 +153,52 @@ def _lire(contenu):
 # ══════════════════════════════════════════════════════════════
 # ANALYSE
 # ══════════════════════════════════════════════════════════════
-def _proposer_correspondance(entetes):
+def _colonnes_servies(lignes, maximum=200):
+    """
+    Colonnes qui portent une vraie donnée dans l'échantillon.
+
+    Un relevé traîne des colonnes vides ou à zéro d'un bout à l'autre —
+    « COMMISSION » quand les frais sont en réalité dans « COURTAGE » — et leur
+    en-tête seul ne dit pas laquelle fait foi. Un zéro ne compte donc pas comme
+    une donnée : c'est la colonne jumelle, servie, qu'il faut proposer.
+    """
+    servies = set()
+    for ligne in lignes[:maximum]:
+        for i, valeur in enumerate(ligne):
+            texte = (valeur or "").strip()
+            if not texte:
+                continue
+            lu = nombre(texte, defaut=None)
+            if lu is None or lu != 0:
+                servies.add(i)
+    return servies
+
+
+def _proposer_correspondance(entetes, lignes=()):
     """
     Colonne proposée pour chaque champ, par mots-clés d'en-tête.
 
-    Deux passes : les en-têtes identiques à un mot-clé sont attribués d'abord,
-    les simples inclusions ensuite. Sans cela, le premier champ servi raflerait
-    une colonne qui appartient à un autre — « Nb titres » pris pour un titre,
-    « PX UN.BRUT » pour un montant brut.
+    Quatre passes, de la plus sûre à la plus permissive : égalité d'en-tête sur
+    une colonne servie, inclusion sur une colonne servie, puis les deux mêmes
+    sur les colonnes vides. L'égalité passe avant l'inclusion, sans quoi le
+    premier champ servi raflerait une colonne qui appartient à un autre —
+    « Nb titres » pris pour un titre. Et une colonne servie passe avant une
+    colonne vide de même nom, parce qu'un en-tête ne vaut que ce qu'il porte.
     """
     normalises = [_entete(e) for e in entetes]
+    servies = _colonnes_servies(lignes) if lignes else set(range(len(entetes)))
     correspondance, prises = {}, set()
 
-    for exact in (True, False):
+    for exact, servie_dabord in ((True, True), (False, True), (True, False), (False, False)):
         for champ, indices in INDICES_COLONNES.items():
             if champ in correspondance:
                 continue
             for indice in indices:
                 trouve = next(
                     (i for i, e in enumerate(normalises)
-                     if i not in prises and (e == indice if exact else indice in e)), None)
+                     if i not in prises
+                     and (not servie_dabord or i in servies)
+                     and (e == indice if exact else indice in e)), None)
                 if trouve is not None:
                     correspondance[champ] = trouve
                     prises.add(trouve)
@@ -182,7 +214,7 @@ def analyser(contenu):
         "separateur": separateur,
         "nb_lignes": len(lignes),
         "apercu": [list(ligne) for ligne in lignes[:LIGNES_APERCU]],
-        "correspondance": _proposer_correspondance(entetes),
+        "correspondance": _proposer_correspondance(entetes, lignes),
     }
 
 
@@ -289,6 +321,15 @@ def executer(contenu, account_id, correspondance, options=None, valider=False):
             raise TransactionError("Compte introuvable.")
         index_positions = _index_positions(db, account_id)
         deja_vues = _signatures_existantes(db, account_id)
+        # Ce que le journal du compte explique déjà, pour ne pas alerter sur
+        # une vente dont l'achat a été importé lors d'un passage précédent.
+        quantites_connues = {}
+        for row in db.execute("""
+            SELECT nom, SUM(CASE WHEN type='achat' THEN quantite ELSE -quantite END) solde
+            FROM transactions WHERE account_id=? AND type IN ('achat','vente')
+            GROUP BY nom
+        """, (account_id,)):
+            quantites_connues[_cle(row["nom"])] = max(0.0, row["solde"] or 0.0)
 
     rapport, a_ecrire = [], []
     for numero, ligne in enumerate(lignes, start=2):      # 1 = l'en-tête
@@ -304,9 +345,12 @@ def executer(contenu, account_id, correspondance, options=None, valider=False):
                 a_ecrire.append(compte_rendu)
         rapport.append(compte_rendu)
 
+    alertes = _controler_stocks(a_ecrire, quantites_connues)
+
     resume = {
         "total": len(rapport),
-        "a_importer": sum(1 for l in rapport if l["statut"] == "ok"),
+        "alertes": alertes,
+        "a_importer": sum(1 for l in rapport if l["statut"] in ("ok", "alerte")),
         "doublons": sum(1 for l in rapport if l["statut"] == "doublon"),
         "erreurs": sum(1 for l in rapport if l["statut"] == "erreur"),
         "dividendes": sum(1 for l in a_ecrire if l["type"] == TYPE_DIVIDENDE),
@@ -421,6 +465,39 @@ def _interpreter(ligne, numero, correspondance, type_defaut, devise_defaut, inde
     resultat["_signature"] = _signature(date, type_tx, brut["libelle"],
                                         quantite, resultat["prix"], resultat["montant"])
     return resultat
+
+
+def _controler_stocks(a_ecrire, quantites_connues):
+    """
+    Signale les ventes qui portent sur plus de titres que le relevé n'en explique.
+
+    C'est le symptôme d'un relevé qui commence après l'acquisition : les titres
+    vendus ont été achetés avant la première ligne du fichier. Le prix moyen
+    pondéré ne peut alors pas être reconstitué, et la plus-value réalisée qui
+    en découlerait serait fausse — mieux vaut le dire que l'afficher.
+    """
+    stocks = dict(quantites_connues)
+    alertes = 0
+    for ligne in sorted(a_ecrire, key=lambda l: l["date"]):
+        if not ligne["sur_ligne"]:
+            continue
+        cle = _cle(ligne["libelle"])
+        if ligne["type"] == "achat":
+            stocks[cle] = stocks.get(cle, 0.0) + ligne["quantite"]
+            continue
+        disponible = stocks.get(cle, 0.0)
+        if ligne["quantite"] > disponible + 1e-9:
+            manque = ligne["quantite"] - disponible
+            ligne["statut"] = "alerte"
+            ligne["message"] = (
+                f"Vente de {ligne['quantite']:g} titres alors que {disponible:g} seulement "
+                f"sont expliqués à cette date : {manque:g} viennent d'un achat antérieur au "
+                "relevé. Le prix de revient et la plus-value de cette ligne seront faux tant "
+                "que la position d'ouverture n'est pas saisie."
+            )
+            alertes += 1
+        stocks[cle] = max(0.0, disponible - ligne["quantite"])
+    return alertes
 
 
 def _ecrire(lignes, account_id, creer_positions, index_positions):

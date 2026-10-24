@@ -362,14 +362,15 @@ function afficherRapport(r) {
   const puces = [
     `${s.a_importer} à importer`,
     s.dividendes ? `dont ${s.dividendes} dividende(s)` : '',
+    s.alertes ? `${s.alertes} vente(s) sans achat connu` : '',
     s.doublons ? `${s.doublons} déjà enregistré(s)` : '',
     s.erreurs ? `${s.erreurs} en erreur` : '',
     s.positions_a_creer.length ? `${s.positions_a_creer.length} position(s) à créer : ${s.positions_a_creer.map(esc).join(', ')}` : '',
   ].filter(Boolean);
   el('impBilan').innerHTML = `<div class="hint-box">${s.total} ligne(s) lue(s) — ${puces.join(' · ')}.</div>`;
 
-  const TON = { ok: 'pos', doublon: 'muted', erreur: 'neg' };
-  const ETIQUETTE = { ok: '✓', doublon: '=', erreur: '✕' };
+  const TON = { ok: 'pos', alerte: 'attention', doublon: 'muted', erreur: 'neg' };
+  const ETIQUETTE = { ok: '✓', alerte: '⚠', doublon: '=', erreur: '✕' };
   el('impRapport').innerHTML =
     `<thead><tr>
       <th ${TH}>Ligne</th><th ${TH}></th><th ${TH}>Date</th><th ${TH}>Type</th>
