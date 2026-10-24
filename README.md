@@ -83,7 +83,13 @@ le versement sert aux enveloppes dont vous ne détaillez pas les lignes.
   et la proposition reste corrigeable. L'aperçu montre chaque ligne avec son sort — à importer,
   déjà au journal, ou en erreur et pourquoi. Aperçu et import empruntent le même code : ce qui
   est montré est exactement ce qui sera écrit. Les lignes déjà présentes sont reconnues, si
-  bien que réimporter un relevé qui se chevauche ne crée pas de doublon.
+  bien que réimporter un relevé qui se chevauche ne crée pas de doublon. Les lignes sont
+  rapprochées par **ISIN** avant de l'être par nom : un courtier qui écrit « TOTALENERGIES SE »
+  et un portefeuille qui dit « TotalEnergies » désignent la même position, et seul le code les
+  réunit. Une ligne créée à l'import garde son ISIN, ce qui rend les imports suivants sûrs.
+  Une vente portant sur plus de titres que le relevé n'en explique est signalée : c'est le
+  signe d'un relevé qui commence après l'acquisition, et la plus-value qui en découlerait
+  serait fausse.
 
 - **Reconstituer les prix de revient.** Les positions sans aucun achat au journal sont
   listées dans l'onglet Mouvements. Leur prix de revient en euros n'est qu'une estimation au

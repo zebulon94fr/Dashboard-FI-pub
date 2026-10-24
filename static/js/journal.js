@@ -224,6 +224,22 @@ export async function executerProgrammes() {
 // ══════════════════════════════════════════════════════════════
 let fichier = { contenu: '', nom: '', analyse: null };
 
+// Une seule liste : elle construit les menus de l'étape 2 et décide de ce qui
+// part au serveur. En tenir deux en parallèle, c'est oublier d'en servir une.
+const CHAMPS_IMPORT = [
+  ['date', 'Date', 'obligatoire'],
+  ['type', 'Type d\'opération', 'sinon, le type par défaut ci-dessous'],
+  ['libelle', 'Libellé', 'nom de la ligne tel que le relevé l\'écrit'],
+  ['isin', 'ISIN', 'rapproche les lignes même si les noms diffèrent'],
+  ['quantite', 'Quantité', ''],
+  ['prix', 'Prix unitaire', 'déduit du montant s\'il manque'],
+  ['devise', 'Devise', ''],
+  ['frais', 'Frais', ''],
+  ['montant', 'Montant', 'pour les versements, retraits et dividendes'],
+  ['credit', 'Crédit', 'relevés qui séparent les entrées des sorties'],
+  ['debit', 'Débit', 'utilisé si montant et crédit sont vides'],
+];
+
 export function openImportModal() {
   if (!comptes().length) { alert('Créez d\'abord un compte où importer les mouvements.'); return; }
   fichier = { contenu: '', nom: '', analyse: null };
@@ -265,18 +281,7 @@ export async function onImportFile(input) {
       `<option value="${i}"${a.correspondance[colonne] === i ? ' selected' : ''}>${esc(nom || `colonne ${i + 1}`)}</option>`
     ).join('');
 
-  el('impMapping').innerHTML = [
-    ['date', 'Date', 'obligatoire'],
-    ['type', 'Type d\'opération', 'sinon, le type par défaut ci-dessous'],
-    ['libelle', 'Libellé / ticker', 'sert à retrouver la ligne concernée'],
-    ['quantite', 'Quantité', ''],
-    ['prix', 'Prix unitaire', 'déduit du montant s\'il manque'],
-    ['devise', 'Devise', ''],
-    ['frais', 'Frais', ''],
-    ['montant', 'Montant', 'pour les versements, retraits et dividendes'],
-    ['credit', 'Crédit', 'relevés qui séparent les entrées des sorties'],
-    ['debit', 'Débit', 'utilisé si montant et crédit sont vides'],
-  ].map(([cle, libelle, aide]) => `
+  el('impMapping').innerHTML = CHAMPS_IMPORT.map(([cle, libelle, aide]) => `
     <div class="form-group">
       <label>${esc(libelle)}${aide ? ` <span class="muted" style="font-weight:400">(${esc(aide)})</span>` : ''}</label>
       <select id="imp-${cle}">${options(cle)}</select>
@@ -295,8 +300,7 @@ export async function onImportFile(input) {
 
 function correspondanceSaisie() {
   const mapping = {};
-  for (const cle of ['date', 'type', 'libelle', 'quantite', 'prix', 'devise', 'frais',
-                     'montant', 'credit', 'debit']) {
+  for (const cle of CHAMPS_IMPORT.map(([cle]) => cle)) {
     const valeur = el(`imp-${cle}`)?.value;
     if (valeur !== '' && valeur != null) mapping[cle] = Number(valeur);
   }

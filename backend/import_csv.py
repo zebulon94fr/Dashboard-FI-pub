@@ -23,7 +23,7 @@ from catalog import ORDRE_TRANSACTIONS
 # Colonnes que le journal sait utiliser. `libelle` sert à retrouver la position
 # concernée ; `montant`, `credit` et `debit` portent les mouvements d'espèces,
 # les relevés comptables ventilant les entrées et les sorties en deux colonnes.
-CHAMPS = ("date", "type", "libelle", "quantite", "prix", "devise", "frais",
+CHAMPS = ("date", "type", "libelle", "isin", "quantite", "prix", "devise", "frais",
           "montant", "credit", "debit")
 
 # Mots-clés cherchés dans les en-têtes. Un en-tête identique à un mot-clé
@@ -42,6 +42,10 @@ INDICES_COLONNES = {
     "libelle":  ("titre", "valeur", "instrument", "produit", "libelle", "symbole",
                  "symbol", "ticker", "nom", "designation", "description",
                  "isin", "code isin"),
+    # L'ISIN identifie une ligne sans ambiguïté, là où les noms divergent d'un
+    # courtier à l'autre — « TOTALENERGIES SE » ici, « TotalEnergies » ailleurs.
+    # Il reste listé dans `libelle` en dernier recours, pour un fichier sans nom.
+    "isin":     ("isin", "code isin", "code valeur"),
     "quantite": ("quantite", "qte", "nombre de parts", "nombre", "quantity", "shares",
                  "nb titres"),
     # « cours » avant « px un brut » : sur un relevé Bourse Direct, le prix
@@ -260,6 +264,20 @@ def _index_positions(db, account_id):
     return index
 
 
+def _rapprocher(index_positions, brut):
+    """
+    Position visée par une ligne : par ISIN d'abord, par libellé ensuite.
+
+    Un ISIN est le même partout ; un nom, non — « TOTALENERGIES SE » chez un
+    courtier et « TotalEnergies » au portefeuille désignent la même ligne, et
+    seul le code les réunit.
+    """
+    for cle in (_cle(brut.get("isin")), _cle(brut.get("libelle"))):
+        if cle and cle in index_positions:
+            return index_positions[cle]
+    return None
+
+
 def _signature(date, type_tx, nom, quantite, prix, montant):
     """
     Empreinte d'un mouvement, pour repérer ce qui est déjà au journal.
@@ -373,6 +391,7 @@ def _interpreter(ligne, numero, correspondance, type_defaut, devise_defaut, inde
     brut = {champ: _valeur(ligne, correspondance, champ) for champ in CHAMPS}
     resultat = {
         "numero": numero, "date": "", "type": "", "libelle": brut["libelle"],
+        "isin": brut["isin"].strip().upper(),
         "quantite": 0.0, "prix": 0.0, "devise": devise_defaut, "frais": 0.0,
         "montant": 0.0, "position_id": None, "position_nom": "", "sur_ligne": False,
         "statut": "erreur", "message": "",
@@ -415,7 +434,7 @@ def _interpreter(ligne, numero, correspondance, type_defaut, devise_defaut, inde
     if type_tx == TYPE_DIVIDENDE:
         # Le rapprochement sert ici au nom : « FR0000120271 » dans un relevé
         # devient « TotalEnergies » si la ligne existe déjà au portefeuille.
-        trouvee = index_positions.get(_cle(brut["libelle"]))
+        trouvee = _rapprocher(index_positions, brut)
         if trouvee:
             resultat["position_id"] = trouvee["id"]
             resultat["position_nom"] = trouvee["nom"]
@@ -427,7 +446,9 @@ def _interpreter(ligne, numero, correspondance, type_defaut, devise_defaut, inde
             resultat["message"] = "Aucun libellé : un dividende se rattache à une ligne nommée."
             return resultat
         resultat["statut"] = "ok"
-        resultat["_signature"] = ("dividende", date, _cle(brut["libelle"]), round(montant, 2))
+        resultat["_signature"] = ("dividende", date,
+                                  _cle(resultat["position_nom"] or brut["libelle"]),
+                                  round(montant, 2))
         return resultat
 
     if sur_ligne:
@@ -446,7 +467,7 @@ def _interpreter(ligne, numero, correspondance, type_defaut, devise_defaut, inde
             resultat["message"] = "Aucun libellé : impossible de savoir quelle ligne est concernée."
             return resultat
 
-        trouvee = index_positions.get(_cle(brut["libelle"]))
+        trouvee = _rapprocher(index_positions, brut)
         if trouvee:
             resultat["position_id"] = trouvee["id"]
             resultat["position_nom"] = trouvee["nom"]
@@ -462,8 +483,12 @@ def _interpreter(ligne, numero, correspondance, type_defaut, devise_defaut, inde
             return resultat
 
     resultat["statut"] = "ok"
-    resultat["_signature"] = _signature(date, type_tx, brut["libelle"],
-                                        quantite, resultat["prix"], resultat["montant"])
+    # `add_transaction` enregistre le nom de la position, pas le libellé du
+    # relevé : l'empreinte doit suivre, sinon un second import ne reconnaîtrait
+    # jamais ses propres écritures dès que les deux noms diffèrent.
+    resultat["_signature"] = _signature(
+        date, type_tx, resultat["position_nom"] or brut["libelle"],
+        quantite, resultat["prix"], resultat["montant"])
     return resultat
 
 
@@ -523,20 +548,24 @@ def _ecrire(lignes, account_id, creer_positions, index_positions):
         if ligne["sur_ligne"] and not position_id:
             if not creer_positions:
                 continue
-            cle = _cle(ligne["libelle"])
-            connue = index_positions.get(cle)
+            cle = _cle(ligne["isin"]) or _cle(ligne["libelle"])
+            connue = index_positions.get(cle) or index_positions.get(_cle(ligne["libelle"]))
             if connue:
                 position_id = connue["id"]
             else:
                 # Quantité et PRU restent à zéro : c'est le journal qui les
                 # établira au recalcul, à partir des mouvements importés.
                 position_id = create_position(account_id, {
-                    "nom": ligne["libelle"][:120], "quantite": 0, "pru": 0,
+                    "nom": ligne["libelle"][:120], "isin": ligne["isin"],
+                    "quantite": 0, "pru": 0,
                     "cours": ligne["prix"], "devise": ligne["devise"],
                     "taux_change": 1.0 if ligne["devise"] == "EUR" else None,
                 })
-                index_positions[cle] = {"id": position_id, "nom": ligne["libelle"],
-                                        "ticker": "", "isin": "", "devise": ligne["devise"]}
+                nouvelle = {"id": position_id, "nom": ligne["libelle"],
+                            "ticker": "", "isin": ligne["isin"], "devise": ligne["devise"]}
+                index_positions[cle] = nouvelle
+                if _cle(ligne["isin"]):
+                    index_positions[_cle(ligne["isin"])] = nouvelle
 
         mouvement = {
             "date": ligne["date"], "account_id": account_id, "type": ligne["type"],
