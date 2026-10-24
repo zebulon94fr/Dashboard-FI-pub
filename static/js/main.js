@@ -20,6 +20,12 @@ import {
   openTxModal, closeTxModal, saveTransaction, editTransaction, deleteTransaction,
   loadTransactions, onTxAccountChange, onTxTypeChange, onTxDeviseChange,
 } from './transactions.js';
+import {
+  loadJournalPanels, reconstituerOuverture, reconstituerToutes,
+  openProgrammeModal, closeProgrammeModal, saveProgramme, editProgramme,
+  deleteProgramme, executerProgrammes,
+  openImportModal, closeImportModal, onImportFile, apercuImport, validerImport,
+} from './journal.js';
 import { setPeriod, loadBenchmark, renderHistory, toggleBenchmark, setBenchmarkMode } from './history.js';
 import { loadSimulation, saveProfil, onProfilChange, simUpdate } from './simulation.js';
 import { showFiscTab, renderFiscalite, calcFisc } from './fiscalite.js';
@@ -138,6 +144,10 @@ Object.assign(window, {
   loadDividendes, onDividendeAccountChange,
   openTxModal, closeTxModal, saveTransaction, editTransaction, deleteTransaction,
   loadTransactions, onTxAccountChange, onTxTypeChange, onTxDeviseChange,
+  loadJournalPanels, reconstituerOuverture, reconstituerToutes,
+  openProgrammeModal, closeProgrammeModal, saveProgramme, editProgramme,
+  deleteProgramme, executerProgrammes,
+  openImportModal, closeImportModal, onImportFile, apercuImport, validerImport,
   setPeriod, loadBenchmark, renderHistory, toggleBenchmark, setBenchmarkMode,
   loadSimulation, saveProfil, onProfilChange, simUpdate,
   showFiscTab, renderFiscalite, calcFisc,

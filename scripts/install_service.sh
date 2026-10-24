@@ -194,8 +194,9 @@ systemctl enable --now dashboard-fi.service
 info "dashboard-fi.service : activé au démarrage et lancé."
 
 if [[ $AVEC_TIMERS -eq 1 ]]; then
-  systemctl enable --now dashboard-fi-refresh.timer dashboard-fi-backup.timer
-  info "Timers cours (horaire) et sauvegarde (quotidienne) activés."
+  systemctl enable --now dashboard-fi-refresh.timer dashboard-fi-backup.timer \
+                         dashboard-fi-versements.timer
+  info "Timers cours (horaire), sauvegarde et versements programmés (quotidiens) activés."
 fi
 if [[ $AVEC_TELEGRAM -eq 1 ]]; then
   systemctl enable --now dashboard-fi-telegram.timer

@@ -68,6 +68,19 @@ export const api = {
   updateTransaction: (id, p) => put(`${BASE}/api/transactions/${id}`, p),
   deleteTransaction: (id)    => json(`${BASE}/api/transactions/${id}`, { method: 'DELETE' }),
 
+  // ── Ce qui alimente le journal autrement qu'à la main ──
+  getPositionsSansJournal: () => json(`${BASE}/api/positions-sans-journal`),
+  ouvrirPosition:  (id, p)    => post(`${BASE}/api/positions/${id}/ouverture`, p),
+
+  getProgrammes:      ()      => json(`${BASE}/api/programmes`),
+  createProgramme:    (p)     => post(`${BASE}/api/programmes`, p),
+  updateProgramme:    (id, p) => put(`${BASE}/api/programmes/${id}`, p),
+  deleteProgramme:    (id)    => json(`${BASE}/api/programmes/${id}`, { method: 'DELETE' }),
+  executerProgrammes: ()      => post(`${BASE}/api/programmes/executer`, {}),
+
+  analyserImport: (contenu)   => post(`${BASE}/api/import/analyse`, { contenu }),
+  executerImport: (p)         => post(`${BASE}/api/import/executer`, p),
+
   // ── Analyse et rééquilibrage ──
   getClasses:       ()     => json(`${BASE}/api/classes`),
   getAnalyse:       (days) => json(`${BASE}/api/analyse?days=${days}`),

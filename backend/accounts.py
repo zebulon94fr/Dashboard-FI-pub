@@ -97,16 +97,22 @@ def list_accounts():
             """).fetchall()
         }
 
-    from backend.transactions import plus_values_realisees
+    from backend.transactions import plus_values_realisees, versements_cumules
     pv_par_compte = {}
     for ligne in plus_values_realisees():
         pv_par_compte[ligne["account_id"]] = pv_par_compte.get(ligne["account_id"], 0) + ligne["pv_realisee"]
+    verses = versements_cumules()
 
     comptes = []
     for row in rows:
         c = dict(row)
         c["pv_pct"] = (c["pv_latent"] / c["investi"]) if c["investi"] else 0
         c["type_label"] = ACCOUNT_TYPES.get(c["type"], {}).get("label", c["type"])
+        # Le plafond réglementaire se juge sur les versements enregistrés au
+        # journal, jamais sur la valorisation : c'est l'argent versé qui est
+        # plafonné, pas ce qu'il est devenu.
+        c["versements"] = verses.get(c["id"], 0.0)
+        c["plafond"] = ACCOUNT_TYPES.get(c["type"], {}).get("plafond")
         # Un crédit porte son capital restant dû en positif : c'est à
         # l'affichage et au patrimoine net de lui donner son signe.
         c["passif"] = c["type"] in TYPES_PASSIF

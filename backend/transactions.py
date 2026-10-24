@@ -187,6 +187,85 @@ def recalc_position(position_id, db=None):
     return quantite
 
 
+def positions_sans_journal():
+    """
+    Positions dont le prix de revient en euros n'est qu'une estimation.
+
+    Aucun achat ni vente ne les adosse au journal : leur `cout_eur` vaut NULL
+    et se recalcule au taux du moment à chaque actualisation, ce qui fait
+    disparaître des comptes le gain de change sur le capital.
+    """
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT p.id, p.nom, p.quantite, p.pru, p.devise, p.valorisation,
+                   p.account_id, a.nom compte, a.type compte_type
+            FROM positions p LEFT JOIN accounts a ON a.id = p.account_id
+            WHERE p.quantite > 0 AND p.pru > 0
+              AND NOT EXISTS (SELECT 1 FROM transactions t
+                              WHERE t.position_id = p.id AND t.type IN ('achat','vente'))
+            ORDER BY a.ordre, p.valorisation DESC
+        """).fetchall()
+    return [dict(r) for r in rows]
+
+
+def ouvrir_position(position_id, date, taux_change=None):
+    """
+    Inscrit au journal l'achat d'ouverture d'une position saisie à la main.
+
+    Sans taux fourni, celui du jour de l'achat est récupéré au marché : c'est
+    tout l'intérêt de l'opération. Figer le prix de revient au cours d'alors
+    rend au portefeuille le gain — ou la perte — de change sur le capital, que
+    l'estimation au taux du moment efface.
+    """
+    with get_db() as db:
+        position = db.execute("SELECT * FROM positions WHERE id=?", (position_id,)).fetchone()
+        if not position:
+            raise TransactionError("Position introuvable.")
+        if position["quantite"] <= 0 or position["pru"] <= 0:
+            raise TransactionError(
+                f"« {position['nom']} » n'a ni quantité ni PRU : il n'y a pas d'achat à reconstituer."
+            )
+        deja = db.execute(
+            "SELECT COUNT(*) n FROM transactions WHERE position_id=? AND type IN ('achat','vente')",
+            (position_id,),
+        ).fetchone()["n"]
+        if deja:
+            raise TransactionError(
+                f"« {position['nom']} » a déjà {deja} mouvement{'s' if deja > 1 else ''} au journal : "
+                "son prix de revient en découle déjà."
+            )
+        ouverture = {
+            "date": date, "account_id": position["account_id"], "position_id": position_id,
+            "type": "achat", "quantite": position["quantite"], "prix": position["pru"],
+            "devise": position["devise"], "taux_change": taux_change,
+            "note": "Achat d'ouverture, reconstitué depuis la saisie manuelle",
+        }
+
+    return add_transaction(ouverture)
+
+
+def versements_cumules(db=None):
+    """
+    Total versé sur chaque enveloppe depuis l'ouverture, en euros.
+
+    C'est la grandeur que surveillent les plafonds réglementaires — 150 000 €
+    sur un PEA. Elle ne retranche pas les retraits : le plafond porte sur les
+    versements bruts cumulés, et un retrait ne libère pas de place. Les achats
+    n'y entrent pas non plus, puisqu'ils déplacent de l'argent déjà versé.
+    """
+    if db is None:
+        with get_db() as connexion:
+            return versements_cumules(connexion)
+
+    return {
+        row["account_id"]: round(row["total"], 2)
+        for row in db.execute("""
+            SELECT account_id, SUM(montant_eur) total FROM transactions
+            WHERE type = 'versement' GROUP BY account_id
+        """)
+    }
+
+
 def plus_values_realisees(account_id=None, annee=None):
     """
     Plus-values réalisées par position, reconstituées depuis le journal.

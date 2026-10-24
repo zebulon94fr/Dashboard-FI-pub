@@ -1,0 +1,13 @@
+[Unit]
+Description=Inscrit les versements programmés arrivés à échéance
+
+[Timer]
+OnCalendar=daily
+# Une échéance se joue à la journée : l'heure exacte n'a aucune importance.
+RandomizedDelaySec=30m
+# Rattrape l'exécution manquée si le serveur était éteint ce jour-là ; le
+# script rattrape de toute façon toutes les échéances dues depuis la dernière.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

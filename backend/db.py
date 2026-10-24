@@ -133,6 +133,29 @@ CREATE TABLE IF NOT EXISTS allocations_classes (
     cible_pct  REAL DEFAULT 0
 );
 
+-- ── Versements programmés ───────────────────────────────────────────────────
+-- Un mouvement récurrent déclaré une fois, inscrit au journal à chaque
+-- échéance. `derniere_echeance` rend l'exécution idempotente : la relancer
+-- deux fois le même jour ne crée pas deux mouvements.
+--
+-- `jour` est borné à 28 : un prélèvement « le 31 » n'existe pas en février, et
+-- décaler l'échéance au dernier jour du mois ferait diverger les dates d'un
+-- mois sur l'autre.
+CREATE TABLE IF NOT EXISTS versements_programmes (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id        INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    type              TEXT    NOT NULL DEFAULT 'versement',  -- versement|retrait|frais
+    montant_eur       REAL    NOT NULL,
+    frequence         TEXT    NOT NULL DEFAULT 'mensuel',    -- mensuel|trimestriel|annuel
+    jour              INTEGER NOT NULL DEFAULT 1,            -- jour du mois, 1 à 28
+    debut             TEXT    NOT NULL,                      -- YYYY-MM-DD
+    fin               TEXT    DEFAULT '',                    -- vide : sans terme
+    actif             INTEGER DEFAULT 1,
+    derniere_echeance TEXT    DEFAULT '',                    -- dernière échéance inscrite
+    note              TEXT    DEFAULT '',
+    created_at        TEXT    DEFAULT (datetime('now'))
+);
+
 -- ── Réglages du profil ──────────────────────────────────────────────────────
 -- Dépenses, épargne et horizon : ce que le dashboard ne peut pas déduire des
 -- cours, et sans quoi aucune métrique d'indépendance financière n'est calculable.
@@ -150,6 +173,7 @@ CREATE INDEX IF NOT EXISTS idx_dividendes_position ON dividendes(nom, account_id
 CREATE INDEX IF NOT EXISTS idx_tx_date             ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_tx_position         ON transactions(position_id, date);
 CREATE INDEX IF NOT EXISTS idx_tx_account          ON transactions(account_id, date);
+CREATE INDEX IF NOT EXISTS idx_programmes_compte   ON versements_programmes(account_id);
 """
 
 # Colonnes ajoutées après la première version du schéma. SQLite ne sait pas

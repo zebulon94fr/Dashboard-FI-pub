@@ -4,7 +4,9 @@ from backend.transactions import (
     add_transaction,
     delete_transaction,
     get_transactions,
+    ouvrir_position,
     plus_values_realisees,
+    positions_sans_journal,
     update_transaction,
 )
 from catalog import public_transaction_types
@@ -45,6 +47,23 @@ def modifier(transaction_id):
 def supprimer(transaction_id):
     delete_transaction(transaction_id)
     return jsonify({"ok": True})
+
+
+@bp.route("/positions-sans-journal", methods=["GET"])
+@json_errors
+def sans_journal():
+    """Positions dont le prix de revient en euros reste une estimation."""
+    return jsonify({"positions": positions_sans_journal()})
+
+
+@bp.route("/positions/<int:position_id>/ouverture", methods=["POST"])
+@json_errors
+def ouverture(position_id):
+    """Reconstitue l'achat d'ouverture d'une position, au taux de sa date."""
+    payload = request.get_json(silent=True) or {}
+    identifiant = ouvrir_position(position_id, (payload.get("date") or "").strip(),
+                                  payload.get("taux_change"))
+    return jsonify({"id": identifiant}), 201
 
 
 @bp.route("/plus-values", methods=["GET"])

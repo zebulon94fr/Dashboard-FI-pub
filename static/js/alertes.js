@@ -9,6 +9,10 @@ const el = id => document.getElementById(id);
 const JOUR = 86400000;
 const PREAVIS_JOURS = 90;      // fenêtre d'alerte autour d'un cap fiscal
 const SEUIL_BAISSE = -0.20;    // moins-value latente signalée sur une ligne
+const SEUIL_PLAFOND = 0.90;    // remplissage d'une enveloppe plafonnée signalé
+
+/** Taux de remplissage, sans signe ni décimale : « 28 % » et non « +28,17% ». */
+const partPct = v => Math.round(v * 100) + ' %';
 
 /** Ce que le franchissement du seuil apporte, par enveloppe. */
 const APRES_SEUIL = {
@@ -125,6 +129,25 @@ function construireAlertes() {
     }
   }
 
+  // ── Plafond d'enveloppe en vue ─────────────────────────────
+  // Un dépassement n'est pas qu'un chiffre : sur un PEA, il expose à la
+  // clôture du plan. Mieux vaut le voir venir que le découvrir.
+  const plafonds = liste.filter(c => c.plafond > 0 && (c.versements || 0) >= c.plafond * SEUIL_PLAFOND);
+  for (const compte of plafonds) {
+    const depasse = compte.versements >= compte.plafond;
+    alertes.push({
+      ton: depasse ? 'danger' : 'warn', icone: '🚧',
+      titre: depasse
+        ? `${esc(compte.nom)} : plafond de versements dépassé`
+        : `${esc(compte.nom)} : ${partPct(compte.versements / compte.plafond)} du plafond de versements`,
+      texte: `${fmt(compte.versements)} versés sur ${fmt(compte.plafond)} autorisés. `
+           + (depasse
+             ? 'Un versement au-delà du plafond expose à la clôture du plan : régularisez auprès de l\'établissement.'
+             : `Il reste ${fmt(compte.plafond - compte.versements)} à verser. `
+               + 'Les retraits ne libèrent pas de place : le plafond porte sur les versements cumulés.'),
+    });
+  }
+
   // ── Taux de change jamais confirmé ─────────────────────────
   const fxDouteux = toutesPositions().filter(p =>
     p.devise && p.devise !== 'EUR' && Number(p.taux_change) === 1 && (p.valorisation || 0) > 0);
@@ -205,12 +228,50 @@ export function renderAlertes() {
 // ══════════════════════════════════════════════════════════════
 // CALENDRIER FISCAL
 // ══════════════════════════════════════════════════════════════
+/**
+ * Jauge de remplissage d'une enveloppe plafonnée.
+ *
+ * Le plafond porte sur les versements cumulés enregistrés au journal, et non
+ * sur la valorisation : un PEA de 160 000 € dont 100 000 € ont été versés
+ * reste dans les clous. Sans aucun versement enregistré, mieux vaut le dire
+ * que d'afficher un rassurant 0 %.
+ */
+function lignePlafond(compte) {
+  const t = typeInfo(compte.type);
+  const verses = compte.versements || 0;
+  const plafond = compte.plafond;
+  const nom = `<span class="cal-name">${esc(t.icone)} ${esc(compte.nom)}</span>`;
+
+  if (!verses) {
+    return `<div class="cal-row">${nom}
+      <span class="cal-when neu">—</span>
+      <span class="cal-sub">Plafond de ${fmt(plafond)} non suivi : aucun versement n'est enregistré
+        au journal. Saisissez-les dans l'onglet Mouvements.</span>
+    </div>`;
+  }
+
+  const part = verses / plafond;
+  const depasse = part >= 1;
+  const proche = part >= SEUIL_PLAFOND;
+  const ton = depasse ? 'neg' : proche ? 'neg' : 'pos';
+  const couleur = depasse ? 'var(--red)' : proche ? 'var(--yellow)' : t.couleur;
+  const reste = plafond - verses;
+
+  return `<div class="cal-row">${nom}
+    <span class="cal-when ${ton}">${depasse ? '⚠ dépassé' : partPct(part)}</span>
+    <span class="cal-sub">${fmt(verses)} versés sur ${fmt(plafond)} —
+      ${depasse ? `dépassement de ${fmt(-reste)}` : `il reste ${fmt(reste)}`}</span>
+    <span class="cal-bar"><span style="width:${Math.min(100, part * 100).toFixed(1)}%;background:${couleur}"></span></span>
+  </div>`;
+}
+
 export function renderCalendrier() {
   const zone = el('overviewCalendrier');
   if (!zone) return;
 
   const avecSeuil = comptes().filter(c => typeInfo(c.type).seuil_ans);
-  if (!avecSeuil.length) {
+  const avecPlafond = comptes().filter(c => c.plafond > 0);
+  if (!avecSeuil.length && !avecPlafond.length) {
     zone.innerHTML = '<div class="table-empty">Aucune de vos enveloppes n\'a de seuil de durée '
                    + '(le PEA, l\'assurance vie et les métaux précieux en ont un).</div>';
     return;
@@ -247,8 +308,14 @@ export function renderCalendrier() {
       </div>`;
     }).join('');
 
-  zone.innerHTML = lignes
-    + '<div class="chart-hint">Les versements ne sont pas suivis : le plafond du PEA n\'est donc pas contrôlé ici.</div>';
+  // Une même enveloppe figure dans les deux groupes — son seuil de durée et son
+  // plafond de versements —, d'où le titre qui les sépare : sans lui, le PEA
+  // semble apparaître deux fois sans raison.
+  const plafonds = avecPlafond.length
+    ? '<div class="chart-title" style="margin:14px 0 6px">Plafonds de versement</div>'
+      + avecPlafond.map(lignePlafond).join('')
+    : '';
+  zone.innerHTML = lignes + plafonds;
 }
 
 // ══════════════════════════════════════════════════════════════

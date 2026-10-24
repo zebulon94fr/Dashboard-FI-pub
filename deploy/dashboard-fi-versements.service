@@ -1,0 +1,20 @@
+[Unit]
+Description=Versements programmés — Dashboard FI
+After=dashboard-fi.service
+Requires=dashboard-fi.service
+
+[Service]
+Type=oneshot
+User=dashboard
+Group=dashboard
+WorkingDirectory=/opt/dashboard-fi
+EnvironmentFile=-/etc/default/dashboard-fi
+Environment=HOME=/opt/dashboard-fi
+Environment=XDG_CACHE_HOME=/opt/dashboard-fi/.cache
+ExecStart=/opt/dashboard-fi/scripts/run_versements.sh
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/dashboard-fi

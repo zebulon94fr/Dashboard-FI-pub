@@ -51,6 +51,8 @@ lancement et tout reste sur votre machine.
 | Déclarer une ligne que vous détenez, pour la première fois | **+ Position** | La ligne est créée **et son achat initial enregistré au journal**, d'un seul geste |
 | Renforcer, alléger, verser, retirer, payer des frais | **+ Mouvement** | L'opération s'ajoute au journal ; quantité, PMP et prix de revient de la ligne sont recalculés |
 | Corriger le nom, le ticker, le secteur d'une ligne | **✏️ Modifier** sur la ligne | Seules les métadonnées changent ; quantité et PRU restent pilotés par le journal |
+| Reprendre un historique entier depuis un relevé de courtier | **📥 Importer un relevé** | Le CSV est analysé, la correspondance des colonnes proposée, puis l'import montré ligne par ligne avant écriture |
+| Déclarer un virement récurrent | **🔁 Programmer** | Les échéances s'inscrivent seules, une fois par jour, y compris celles déjà passées |
 
 Autrement dit : **+ Position** une fois par ligne, **+ Mouvement** à chaque opération qui suit.
 Le formulaire de position demande déjà une quantité et un PRU — c'est un achat qui s'ignore,
@@ -73,6 +75,30 @@ Dès qu'un achat est enregistré sur une position, sa quantité, son PRU et son 
 sont recalculés depuis le journal et ne se saisissent plus à la main. Un achat représentant
 déjà l'argent qui entre, ne doublez pas l'écriture avec un versement pour la même somme :
 le versement sert aux enveloppes dont vous ne détaillez pas les lignes.
+
+#### Trois façons de le remplir sans tout ressaisir
+
+- **Importer un relevé CSV.** Aucun courtier n'exporte le même fichier : le séparateur,
+  l'encodage et le format des dates sont détectés, les colonnes reconnues par leurs en-têtes,
+  et la proposition reste corrigeable. L'aperçu montre chaque ligne avec son sort — à importer,
+  déjà au journal, ou en erreur et pourquoi. Aperçu et import empruntent le même code : ce qui
+  est montré est exactement ce qui sera écrit. Les lignes déjà présentes sont reconnues, si
+  bien que réimporter un relevé qui se chevauche ne crée pas de doublon.
+
+- **Reconstituer les prix de revient.** Les positions sans aucun achat au journal sont
+  listées dans l'onglet Mouvements. Leur prix de revient en euros n'est qu'une estimation au
+  taux du moment, recalculée à chaque actualisation — ce qui efface le gain de change sur le
+  capital. Donner la date d'achat suffit : le taux de cette date est récupéré au marché et le
+  prix de revient figé.
+
+- **Programmer les versements récurrents.** Un virement mensuel déclaré une fois s'inscrit
+  tout seul, une fois par jour. L'exécution est rattrapante — un serveur arrêté deux semaines
+  ne perd rien — et idempotente : la relancer ne double rien. Le jour du mois est borné à 28,
+  le 31 n'existant pas partout.
+
+Les versements ainsi enregistrés servent aussi au **contrôle des plafonds** : le calendrier
+fiscal affiche le remplissage du PEA sur ses 150 000 €, et une alerte se déclenche à 90 %.
+Le plafond porte sur les versements bruts cumulés — un retrait ne libère pas de place.
 
 Ce que le journal débloque :
 
@@ -444,6 +470,7 @@ rattrape l'exécution manquée si le serveur était éteint à l'heure prévue.
 |---|---|---|
 | `dashboard-fi-refresh.timer` | Actualise les cours sans ouvrir le dashboard | toutes les heures |
 | `dashboard-fi-backup.timer` | Sauvegarde la base dans `backups/` | quotidienne, rétention 14 jours |
+| `dashboard-fi-versements.timer` | Inscrit les versements programmés arrivés à échéance | quotidienne |
 | `dashboard-fi-telegram.timer` | Envoie le résumé Telegram | samedi 9 h (option `--with-telegram`) |
 
 ### Exploitation
@@ -500,6 +527,13 @@ autre client peut donc piloter le dashboard de la même façon.
 | `GET` `POST` | `/api/transactions` | Journal des mouvements (filtres : compte, position, type, année) |
 | `PUT` `DELETE` | `/api/transactions/<id>` | Modification et suppression, avec recalcul du PMP |
 | `GET` | `/api/plus-values` | Plus-values réalisées reconstituées depuis le journal |
+| `GET` | `/api/positions-sans-journal` | Positions dont le prix de revient n'est qu'une estimation |
+| `POST` | `/api/positions/<id>/ouverture` | Reconstitue l'achat d'ouverture, au taux de sa date |
+| `GET` `POST` | `/api/programmes` | Versements programmés |
+| `PUT` `DELETE` | `/api/programmes/<id>` | Modification et suppression |
+| `POST` | `/api/programmes/executer` | Inscrit les échéances dues (idempotent) |
+| `POST` | `/api/import/analyse` | En-têtes, aperçu et correspondance proposée d'un CSV |
+| `POST` | `/api/import/executer` | Aperçu détaillé, ou import effectif si `valider` |
 | `GET` | `/api/performance?days=` | TWR en base 100 et TRI du portefeuille |
 | `GET` | `/api/classes` | Catalogue des classes d'actifs et répartition courante |
 | `GET` | `/api/analyse?days=` | Risque, concentration, devises, attribution et contributions |
@@ -526,6 +560,8 @@ Dashboard-FI-pub/
 │   ├── accounts.py            # CRUD des comptes
 │   ├── positions.py           # CRUD des positions, calculs, historique
 │   ├── transactions.py        # Journal, prix moyen pondéré, plus-values réalisées
+│   ├── programmes.py          # Versements récurrents et leur échéancier
+│   ├── import_csv.py          # Reprise d'un relevé de courtier
 │   ├── performance.py         # Flux datés, TWR et TRI (XIRR)
 │   ├── analyse.py             # Risque, concentration, devises, contributions
 │   ├── rebalancing.py         # Allocation cible par classe et ordre d'arbitrage
@@ -555,6 +591,7 @@ Dashboard-FI-pub/
 │   ├── set_password.py        # Authentification HTTP Basic
 │   ├── set_telegram.py        # Bot et chat_id Telegram
 │   ├── demo_data.py           # Portefeuille de démonstration
+│   ├── run_versements.sh      # Échéances dues des versements programmés
 │   └── migrate_portfoliofi.py # Reprise d'une base de l'ancienne version
 ├── deploy/                 # Unités systemd + modèle de /etc/default/dashboard-fi
 ├── dashboard.db            # Base SQLite (non versionnée, créée au lancement)
@@ -571,6 +608,7 @@ d'enveloppe se fait donc dans `catalog.py`, sans migration.
 ```
 allocations_classes            (cible par classe d'actifs, hors enveloppes)
 reglages                       (dépenses, épargne, horizon — le profil d'indépendance)
+versements_programmes          (mouvements récurrents, rattachés à un compte)
 
 accounts ──┬── positions ──── price_history
            ├── transactions ──── (position_id : achats et ventes)

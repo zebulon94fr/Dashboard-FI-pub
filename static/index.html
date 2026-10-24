@@ -398,8 +398,14 @@
         <div class="section-title">📒 Journal des mouvements</div>
         <div class="section-subtitle">Achats, ventes et versements datés</div>
       </div>
-      <button class="btn primary" onclick="openTxModal()"
-        title="Enregistrer une opération sur une ligne qui existe déjà : renforcement, vente, versement, frais">+ Mouvement</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="openImportModal()"
+          title="Reprendre un relevé de courtier au format CSV">📥 Importer un relevé</button>
+        <button class="btn" onclick="openProgrammeModal()"
+          title="Déclarer un virement récurrent : ses échéances s'inscriront seules">🔁 Programmer</button>
+        <button class="btn primary" onclick="openTxModal()"
+          title="Enregistrer une opération sur une ligne qui existe déjà : renforcement, vente, versement, frais">+ Mouvement</button>
+      </div>
     </div>
     <div class="intro-box">
       <strong>Quel bouton, quand ?</strong> <strong>+ Position</strong> sert à déclarer une ligne
@@ -416,6 +422,38 @@
     </div>
 
     <div class="cards" id="txCards" style="margin-bottom:16px"></div>
+
+    <div class="chart-box" id="txSansJournalBox" style="margin-bottom:16px" hidden>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap">
+        <div class="chart-title" style="margin-bottom:0">
+          Prix de revient à reconstituer (<span id="txSansJournalCount">0</span>)
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="date" id="txOuvertureDate" style="padding:4px 8px;font-size:12px;width:150px">
+          <button class="btn btn-mini" onclick="reconstituerToutes()"
+            title="Applique cette date à toutes les lignes ci-dessous">Tout reconstituer</button>
+        </div>
+      </div>
+      <div class="chart-hint" style="margin-bottom:10px">
+        Ces lignes n'ont aucun achat au journal : leur prix de revient en euros est réestimé au
+        taux du moment à chaque actualisation, ce qui efface le gain de change sur le capital.
+        Dater l'achat le fige au cours d'alors — c'est tout ce qu'il manque.
+      </div>
+      <div class="table-wrap">
+        <table id="txSansJournal" style="width:100%;font-size:13px;border-collapse:collapse"></table>
+      </div>
+    </div>
+
+    <div class="chart-box" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap">
+        <div class="chart-title" style="margin-bottom:0">Versements programmés</div>
+        <button class="btn btn-mini" id="progRunBtn" onclick="executerProgrammes()"
+          title="Inscrit maintenant toutes les échéances dues">Inscrire les échéances dues</button>
+      </div>
+      <div class="table-wrap">
+        <table id="txProgrammes" style="width:100%;font-size:13px;border-collapse:collapse"></table>
+      </div>
+    </div>
 
     <div class="chart-box" style="margin-bottom:16px">
       <div class="chart-title">Plus-values réalisées</div>
@@ -918,6 +956,154 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeTxModal()">Annuler</button>
       <button class="btn primary" id="txSaveBtn" onclick="saveTransaction()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="progModal">
+  <div class="modal">
+    <h2 id="progModalTitle">Programmer un versement</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Compte</label>
+        <select id="progCompte"></select>
+      </div>
+      <div class="form-group">
+        <label>Type de mouvement</label>
+        <select id="progType">
+          <option value="versement">⬇ Versement</option>
+          <option value="retrait">⬆ Retrait</option>
+          <option value="frais">✂ Frais</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Montant (€)</label>
+        <input type="text" id="progMontant" placeholder="ex : 300">
+      </div>
+      <div class="form-group">
+        <label>Rythme</label>
+        <select id="progFrequence">
+          <option value="mensuel">Mensuel</option>
+          <option value="trimestriel">Trimestriel</option>
+          <option value="annuel">Annuel</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Jour du mois</label>
+        <input type="number" id="progJour" min="1" max="28" value="1">
+      </div>
+      <div class="form-group">
+        <label>Première échéance</label>
+        <input type="date" id="progDebut">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Dernière échéance <span class="opt">optionnel</span></label>
+        <input type="date" id="progFin">
+      </div>
+      <div class="form-group">
+        <label>Note <span class="opt">optionnel</span></label>
+        <input type="text" id="progNote" placeholder="ex : virement automatique">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group full">
+        <label class="sim-check" style="font-size:12.5px;text-transform:none;color:var(--text)">
+          <input type="checkbox" id="progActif" checked> Programme actif
+        </label>
+      </div>
+    </div>
+    <div class="hint-box">
+      Les échéances s'inscrivent au journal une fois par jour, et <strong>toutes celles
+      arrivées à terme depuis la première</strong> sont rattrapées — y compris les passées.
+      Si vous avez déjà saisi ces versements à la main, faites commencer le programme après
+      le dernier d'entre eux pour ne pas les compter deux fois.
+      Le jour est limité à 28 : le 31 n'existe pas tous les mois.
+    </div>
+    <div class="form-error" id="progError"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeProgrammeModal()">Annuler</button>
+      <button class="btn primary" onclick="saveProgramme()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="impModal">
+  <div class="modal modal-large">
+    <h2>Importer un relevé de courtier</h2>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Fichier CSV</label>
+        <input type="file" id="impFichier" accept=".csv,.txt,text/csv" onchange="onImportFile(this)">
+      </div>
+      <div class="form-group">
+        <label>Compte de destination</label>
+        <select id="impCompte"></select>
+      </div>
+    </div>
+    <div class="hint-box">
+      Aucun courtier n'exporte le même fichier : le séparateur, les en-têtes et le format des
+      dates sont devinés, puis <strong>vous corrigez</strong>. Rien n'est écrit avant que
+      vous n'ayez vu, ligne par ligne, ce qui sera enregistré.
+    </div>
+
+    <div id="impEtape2" hidden>
+      <div class="hint-box" id="impResume"></div>
+      <div class="chart-title" style="margin-top:14px">Aperçu du fichier</div>
+      <div class="table-wrap" style="max-height:160px;overflow:auto">
+        <table id="impApercu" style="width:100%;font-size:12px;border-collapse:collapse"></table>
+      </div>
+
+      <div class="chart-title" style="margin-top:14px">À quoi correspond chaque colonne</div>
+      <div class="form-row" id="impMapping"></div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Type par défaut <span class="opt">si la colonne manque</span></label>
+          <select id="impTypeDefaut">
+            <option value="">— aucun —</option>
+            <option value="achat">Achat</option>
+            <option value="vente">Vente</option>
+            <option value="versement">Versement</option>
+            <option value="retrait">Retrait</option>
+            <option value="frais">Frais</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Devise par défaut</label>
+          <input type="text" id="impDeviseDefaut" value="EUR" maxlength="3">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group full">
+          <label class="sim-check" style="font-size:12.5px;text-transform:none;color:var(--text)">
+            <input type="checkbox" id="impCreerPositions" checked>
+            Créer les positions absentes du compte
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content:flex-start">
+        <button class="btn" onclick="apercuImport()">Vérifier ce qui sera importé</button>
+      </div>
+    </div>
+
+    <div id="impEtape3" hidden>
+      <div id="impBilan"></div>
+      <div class="table-wrap" style="max-height:260px;overflow:auto">
+        <table id="impRapport" style="width:100%;font-size:12px;border-collapse:collapse"></table>
+      </div>
+    </div>
+
+    <div class="form-error" id="impError"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeImportModal()">Fermer</button>
+      <button class="btn primary" id="impValiderBtn" onclick="validerImport()" hidden>Importer</button>
     </div>
   </div>
 </div>

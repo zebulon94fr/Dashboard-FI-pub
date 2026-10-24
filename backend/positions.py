@@ -229,7 +229,11 @@ def create_position(account_id, payload):
         add_transaction({
             "date": date_achat, "account_id": account_id, "position_id": position_id,
             "type": "achat", "quantite": champs["quantite"], "prix": champs["pru"],
-            "devise": champs["devise"], "taux_change": taux,
+            "devise": champs["devise"],
+            # Sans taux saisi, celui du jour de l'achat, et non celui du jour
+            # présent : un achat daté de l'an dernier doit figer le prix de
+            # revient au cours d'alors, sinon la ligne n'y gagne rien.
+            "taux_change": payload.get("taux_change"),
             "note": "Achat initial, enregistré à la création de la ligne",
         })
 

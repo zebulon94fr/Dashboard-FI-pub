@@ -6,6 +6,7 @@ import { renderHistory } from './history.js';
 import { loadSimulation } from './simulation.js';
 import { loadDividendes } from './dividendes.js';
 import { loadTransactions } from './transactions.js';
+import { loadJournalPanels } from './journal.js';
 import { loadAnalyse } from './analyse.js';
 import { renderFiscalite } from './fiscalite.js';
 import { renderRebalancing } from './rebalancing.js';
@@ -36,7 +37,7 @@ export function showTab(tab) {
   if (tab === 'history')     renderHistory();
   if (tab === 'simulation')  loadSimulation();
   if (tab === 'dividendes')  loadDividendes();
-  if (tab === 'transactions') loadTransactions();
+  if (tab === 'transactions') { loadTransactions(); loadJournalPanels(); }
   if (tab === 'analyse')     loadAnalyse();
   if (tab === 'fiscalite')   renderFiscalite();
   if (tab === 'rebalancing') renderRebalancing();
