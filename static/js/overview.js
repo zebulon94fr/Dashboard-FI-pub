@@ -4,7 +4,7 @@ import { fmt, fmtP, cls, kpiCard, destroyChart, makeChart, fmtChart } from './co
 import { couleursComptes, couleurIndex, alpha } from './colors.js';
 import { renderAlertes, renderCalendrier, renderFaits, clearAlertes } from './alertes.js';
 
-const ID_CHARTS = ['chartAlloc', 'chartType', 'chartPerf', 'chartTop10', 'chartSecteur', 'chartGeo'];
+const ID_CHARTS = ['chartAlloc', 'chartPerf', 'chartTop10', 'chartSecteur', 'chartGeo'];
 
 export function renderOverview() {
   const liste = comptes();
@@ -94,41 +94,37 @@ export function renderOverview() {
     options: optionsDoughnut,
   });
 
-  // ── Répartition par type d'enveloppe ────────────────────────
-  const parType = {};
-  for (const c of liste) {
-    if (c.passif) continue;
-    const t = typeInfo(c.type);
-    const agrege = parType[c.type] ||= { label: t.label, couleur: t.couleur, valorisation: 0 };
-    agrege.valorisation += c.valorisation || 0;
-  }
-  const types = Object.values(parType).filter(t => t.valorisation > 0);
-  makeChart('chartType', {
-    type: 'doughnut',
-    data: {
-      labels: types.map(t => t.label),
-      datasets: [{ data: types.map(t => t.valorisation), backgroundColor: types.map(t => t.couleur), borderWidth: 0, hoverOffset: 6 }],
-    },
-    options: optionsDoughnut,
-  });
-
   // ── Performance par compte ──────────────────────────────────
+  // En barres horizontales : les noms de comptes se lisent sans rotation, même
+  // dans une demi-colonne. Un compte sans rien d'investi n'a pas de
+  // performance, et un passif encore moins : tous deux sortent du graphique.
+  const performances = liste.filter(c => !c.passif && c.investi > 0);
   makeChart('chartPerf', {
     type: 'bar',
     data: {
-      labels: liste.map(c => c.nom),
+      labels: performances.map(c => c.nom),
       datasets: [{
-        data: liste.map(c => +((c.pv_pct || 0) * 100).toFixed(2)),
-        backgroundColor: liste.map(c => (c.pv_pct || 0) >= 0 ? 'rgba(63,185,80,.7)' : 'rgba(248,81,73,.7)'),
+        data: performances.map(c => +((c.pv_pct || 0) * 100).toFixed(2)),
+        backgroundColor: performances.map(c => (c.pv_pct || 0) >= 0 ? 'rgba(63,185,80,.7)' : 'rgba(248,81,73,.7)'),
         borderRadius: 5,
       }],
     },
     options: {
+      indexAxis: 'y',
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            // Le pourcentage seul perd l'ordre de grandeur : 20 % sur le plus
+            // petit compte ne pèsent pas les 5 % du plus gros.
+            label: ctx => ` ${ctx.raw} % — ${fmtChart(performances[ctx.dataIndex].pv_latent)}`,
+          },
+        },
+      },
       scales: {
-        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted } },
-        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, callback: v => v + '%' } },
+        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, callback: v => v + '%' } },
+        y: { grid: { display: false }, ticks: { color: chartColors().muted, font: { size: 11 } } },
       },
     },
   });
