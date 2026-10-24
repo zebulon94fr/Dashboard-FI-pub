@@ -6,6 +6,7 @@ dividendes) s'y rattache par `account_id`.
 """
 import contextlib
 import logging
+import os
 import sqlite3
 
 import config
@@ -179,6 +180,32 @@ def _migrate(db):
             log.info(f"Migration : {table}.{colonne} déjà ajoutée par un autre processus")
 
 
+# Nom du fichier de base de portfolioFI, la version précédente du dashboard.
+# Les deux noms diffèrent : une mise à jour par `git pull` laisse donc l'ancienne
+# base intacte à côté, sans que la nouvelle application la lise — d'où un
+# dashboard vide qui donne l'impression d'avoir perdu ses données.
+ANCIENNE_BASE = "portfolio.db"
+
+
+def _signaler_ancienne_base(db):
+    """Sur une base vide, indiquer une base portfolioFI voisine si elle existe."""
+    if db.execute("SELECT COUNT(*) n FROM accounts").fetchone()["n"]:
+        return
+    dossiers = {os.path.dirname(os.path.abspath(config.DB_FILE)), config.BASE_DIR}
+    for dossier in dossiers:
+        ancienne = os.path.join(dossier, ANCIENNE_BASE)
+        if not os.path.exists(ancienne):
+            continue
+        log.warning(
+            f"Base vide, mais {ancienne} existe : c'est la base de portfolioFI, "
+            "que cette version ne lit pas (le schéma a changé). Pour reprendre "
+            "positions, historique et dividendes :\n"
+            f"    python scripts/migrate_portfoliofi.py {ancienne} --simulation\n"
+            "puis la même commande sans --simulation."
+        )
+        return
+
+
 @contextlib.contextmanager
 def get_db():
     conn = sqlite3.connect(config.DB_FILE, timeout=10)
@@ -195,8 +222,17 @@ def get_db():
         conn.close()
 
 
-def init_db():
+def init_db(signaler_ancienne=True):
+    """
+    Crée le schéma au besoin, applique les migrations de colonnes.
+
+    `signaler_ancienne` est désactivé par le script de reprise : il crée
+    justement la base cible vide avant de la remplir, et n'a pas besoin qu'on
+    lui conseille de se lancer lui-même.
+    """
     with get_db() as db:
         db.executescript(SCHEMA)
         _migrate(db)
+        if signaler_ancienne:
+            _signaler_ancienne_base(db)
     log.info(f"Base initialisée : {config.DB_FILE}")

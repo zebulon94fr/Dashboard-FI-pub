@@ -16,6 +16,7 @@ lancement et tout reste sur votre machine.
 - [Types de comptes](#types-de-comptes)
 - [Installation](#installation)
 - [Premiers pas](#premiers-pas)
+- [Venir de portfolioFI](#venir-de-portfoliofi) — reprise de l'ancienne base
 - [Cours automatiques](#cours-automatiques)
 - [Options](#options) — clé IA, authentification, Telegram
 - [HTTPS](#https)
@@ -263,6 +264,53 @@ python scripts/demo_data.py           # portefeuille fictif de 6 comptes
 python scripts/demo_data.py --reset   # repartir d'une base vide
 ```
 
+## Venir de portfolioFI
+
+[portfolioFI](https://github.com/zebulon94fr/portfolioFI) est la version précédente de ce
+dashboard. Mettre à jour n'y suffit pas, pour deux raisons :
+
+- **les fichiers de base diffèrent** — `portfolio.db` d'un côté, `dashboard.db` de l'autre.
+  Un `git pull` ne touche donc pas à l'ancienne base : elle reste intacte à côté, et
+  l'application démarre sur une base vide. C'est la cause la plus fréquente d'un dashboard
+  qui semble avoir tout perdu. **Rien n'est effacé** : vos données sont dans `portfolio.db`.
+- **le schéma a changé** — l'enveloppe était une chaîne figée dans `positions.compte` ;
+  c'est maintenant une ligne de `accounts`, et l'historique est passé d'une colonne par
+  enveloppe à une ligne par compte et par date.
+
+Un script fait la reprise. Il lit l'ancienne base en lecture seule et n'y écrit jamais :
+
+```bash
+python scripts/migrate_portfoliofi.py /chemin/vers/portfolio.db --simulation
+python scripts/migrate_portfoliofi.py /chemin/vers/portfolio.db
+```
+
+Lancez d'abord `--simulation` : le bilan s'affiche sans qu'une ligne soit écrite. La reprise
+refuse de s'exécuter sur une base cible qui contient déjà des comptes. Si le dashboard
+tourne en service, arrêtez-le le temps de l'opération (`sudo systemctl stop dashboard-fi`,
+puis `start`) : la base cible est écrite directement.
+
+Ce qui est repris : les comptes (créés depuis les enveloppes rencontrées), les positions
+avec leur valorisation au centime, l'historique quotidien complet, les dividendes, et les
+cours des 90 derniers jours — au-delà, l'application les purge elle-même. Les tickers,
+secteurs et zones ne vivaient pas en base mais dans le code de l'ancienne version : s'il est
+encore à côté de la base, le script les y relit pour que les positions migrées retrouvent
+leurs cours automatiques.
+
+Trois points méritent l'attention :
+
+- **Les dates d'ouverture** de comptes n'existaient pas : à ressaisir, faute de quoi les
+  seuils de 5 ans du PEA et de 8 ans de l'assurance-vie ne sont pas calculés.
+- **Le journal des mouvements** est vide — l'ancienne version n'en tenait pas. Tant qu'il
+  l'est, tout versement passé est compté comme de la performance par le TWR, et le TRI reste
+  indisponible. Saisir les versements et retraits importants suffit à redresser les deux.
+- **Les deux compartiments du PER** sont fusionnés en un compte par défaut, parce que
+  l'ancienne base n'en gardait qu'un historique agrégé. `--per-separe` crée les deux
+  comptes ; la courbe PER par compte est alors omise plutôt qu'inventée, le total restant
+  exact.
+
+Enfin, copiez `settings.json` : le format (mot de passe, clé IA, Telegram) est identique
+dans les deux versions.
+
 ## Cours automatiques
 
 Les cours viennent de Yahoo Finance via [yfinance](https://github.com/ranaroussi/yfinance).
@@ -506,7 +554,8 @@ Dashboard-FI-pub/
 │   ├── generate_cert.sh       # Certificat TLS auto-signé
 │   ├── set_password.py        # Authentification HTTP Basic
 │   ├── set_telegram.py        # Bot et chat_id Telegram
-│   └── demo_data.py           # Portefeuille de démonstration
+│   ├── demo_data.py           # Portefeuille de démonstration
+│   └── migrate_portfoliofi.py # Reprise d'une base de l'ancienne version
 ├── deploy/                 # Unités systemd + modèle de /etc/default/dashboard-fi
 ├── dashboard.db            # Base SQLite (non versionnée, créée au lancement)
 ├── backups/                # Sauvegardes quotidiennes (non versionné)
