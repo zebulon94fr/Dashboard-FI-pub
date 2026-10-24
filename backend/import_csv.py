@@ -21,26 +21,37 @@ from backend.transactions import TransactionError, add_transaction, recalc_posit
 from catalog import ORDRE_TRANSACTIONS
 
 # Colonnes que le journal sait utiliser. `libelle` sert à retrouver la position
-# concernée ; `montant` ne sert qu'aux mouvements d'espèces.
-CHAMPS = ("date", "type", "libelle", "quantite", "prix", "devise", "frais", "montant")
+# concernée ; `montant`, `credit` et `debit` portent les mouvements d'espèces,
+# les relevés comptables ventilant les entrées et les sorties en deux colonnes.
+CHAMPS = ("date", "type", "libelle", "quantite", "prix", "devise", "frais",
+          "montant", "credit", "debit")
 
-# Mots-clés cherchés dans les en-têtes, du plus spécifique au plus général :
-# « prix de revient » ne doit pas être pris pour « prix ».
+# Mots-clés cherchés dans les en-têtes. Un en-tête identique à un mot-clé
+# l'emporte toujours sur un en-tête qui le contient (voir _proposer_correspondance) :
+# sans cette règle, « Nb titres » serait pris pour le nom du titre.
 INDICES_COLONNES = {
     "date":     ("date operation", "date d operation", "trade date", "date execution",
                  "date valeur", "date"),
+    # « designation » et « description » ferment la liste : un fichier qui porte
+    # une vraie colonne « Type » la garde, et un relevé qui n'en a pas — Bourse
+    # Direct range le sens de l'opération dans « Désignation » — y trouve le sien.
     "type":     ("type operation", "type d operation", "operation", "nature", "sens",
-                 "transaction", "type"),
-    "libelle":  ("libelle", "designation", "instrument", "produit", "valeur", "titre",
-                 "description", "nom", "symbole", "symbol", "ticker", "isin", "code isin"),
+                 "transaction", "type", "designation", "description"),
+    # Les noms d'instrument passent avant les libellés ambigus : face à
+    # « Désignation » et « Titre », c'est « Titre » qui nomme la ligne.
+    "libelle":  ("titre", "valeur", "instrument", "produit", "libelle", "symbole",
+                 "symbol", "ticker", "nom", "designation", "description",
+                 "isin", "code isin"),
     "quantite": ("quantite", "qte", "nombre de parts", "nombre", "quantity", "shares",
                  "nb titres"),
-    "prix":     ("prix unitaire", "cours unitaire", "prix d execution", "prix", "cours",
-                 "price"),
+    "prix":     ("prix unitaire", "cours unitaire", "px un brut", "px un",
+                 "prix d execution", "prix", "cours", "price"),
     "devise":   ("devise", "currency", "monnaie"),
     "frais":    ("frais de courtage", "frais", "commission", "courtage", "fee", "fees"),
-    "montant":  ("montant net", "montant brut", "montant total", "montant", "net",
-                 "total", "amount"),
+    "montant":  ("montant net", "montant brut", "montant total", "montant", "brut",
+                 "net", "total", "amount"),
+    "credit":   ("credit", "credit eur", "entree"),
+    "debit":    ("debit", "debit eur", "sortie"),
 }
 
 # Mots-clés cherchés dans la colonne « type ». Ils sont cherchés comme des mots
@@ -53,7 +64,13 @@ INDICES_TYPES = {
     "versement": ("versement", "virement", "depot", "deposit", "apport", "alimentation",
                   "contribution"),
     "frais":     ("frais", "commission", "droits de garde", "fee", "charge"),
+    # Un dividende n'est pas un mouvement du journal : il a sa propre table, et
+    # l'import l'y dirige plutôt que de le refuser ou d'en faire un versement.
+    "dividende": ("coupon", "coupons", "dividende", "dividend", "interets",
+                  "interet", "revenu", "revenus"),
 }
+
+TYPE_DIVIDENDE = "dividende"
 
 FORMATS_DATE = ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y", "%Y/%m/%d",
                 "%d/%m/%y", "%m/%d/%Y")
@@ -131,18 +148,29 @@ def _lire(contenu):
 # ANALYSE
 # ══════════════════════════════════════════════════════════════
 def _proposer_correspondance(entetes):
-    """Colonne du fichier proposée pour chaque champ, par mots-clés d'en-tête."""
+    """
+    Colonne proposée pour chaque champ, par mots-clés d'en-tête.
+
+    Deux passes : les en-têtes identiques à un mot-clé sont attribués d'abord,
+    les simples inclusions ensuite. Sans cela, le premier champ servi raflerait
+    une colonne qui appartient à un autre — « Nb titres » pris pour un titre,
+    « PX UN.BRUT » pour un montant brut.
+    """
     normalises = [_entete(e) for e in entetes]
     correspondance, prises = {}, set()
-    for champ, indices in INDICES_COLONNES.items():
-        for indice in indices:
-            trouve = next(
-                (i for i, e in enumerate(normalises)
-                 if i not in prises and (e == indice or indice in e)), None)
-            if trouve is not None:
-                correspondance[champ] = trouve
-                prises.add(trouve)
-                break
+
+    for exact in (True, False):
+        for champ, indices in INDICES_COLONNES.items():
+            if champ in correspondance:
+                continue
+            for indice in indices:
+                trouve = next(
+                    (i for i, e in enumerate(normalises)
+                     if i not in prises and (e == indice if exact else indice in e)), None)
+                if trouve is not None:
+                    correspondance[champ] = trouve
+                    prises.add(trouve)
+                    break
     return correspondance
 
 
@@ -215,12 +243,19 @@ def _signature(date, type_tx, nom, quantite, prix, montant):
 
 
 def _signatures_existantes(db, account_id):
-    return {
+    """Empreintes de tout ce que le compte porte déjà — journal et dividendes."""
+    connues = {
         _signature(r["date"], r["type"], r["nom"], r["quantite"], r["prix"], r["montant_eur"])
         for r in db.execute(
             "SELECT date, type, nom, quantite, prix, montant_eur FROM transactions "
             "WHERE account_id=?", (account_id,))
     }
+    connues |= {
+        ("dividende", r["date"], _cle(r["nom"]), round(r["montant"], 2))
+        for r in db.execute(
+            "SELECT date, nom, montant FROM dividendes WHERE account_id=?", (account_id,))
+    }
+    return connues
 
 
 # ══════════════════════════════════════════════════════════════
@@ -274,6 +309,7 @@ def executer(contenu, account_id, correspondance, options=None, valider=False):
         "a_importer": sum(1 for l in rapport if l["statut"] == "ok"),
         "doublons": sum(1 for l in rapport if l["statut"] == "doublon"),
         "erreurs": sum(1 for l in rapport if l["statut"] == "erreur"),
+        "dividendes": sum(1 for l in a_ecrire if l["type"] == TYPE_DIVIDENDE),
         "positions_a_creer": sorted({l["libelle"] for l in a_ecrire
                                      if l["statut"] == "ok" and not l["position_id"]
                                      and l["sur_ligne"]}),
@@ -306,7 +342,7 @@ def _interpreter(ligne, numero, correspondance, type_defaut, devise_defaut, inde
     resultat["date"] = date
 
     type_tx = _type(brut["type"], type_defaut)
-    if type_tx not in ORDRE_TRANSACTIONS:
+    if type_tx not in ORDRE_TRANSACTIONS and type_tx != TYPE_DIVIDENDE:
         resultat["message"] = (
             f"Type de mouvement non reconnu : « {brut['type']} ». "
             "Choisissez un type par défaut, ou désignez la bonne colonne."
@@ -316,9 +352,14 @@ def _interpreter(ligne, numero, correspondance, type_defaut, devise_defaut, inde
         return resultat
     resultat["type"] = type_tx
 
-    quantite = nombre(brut["quantite"])
-    prix = nombre(brut["prix"])
-    montant = abs(nombre(brut["montant"]))
+    # Le signe de la quantité est redondant avec le type du mouvement, et les
+    # relevés ne s'accordent pas sur sa convention : seule la valeur compte.
+    quantite = abs(nombre(brut["quantite"]))
+    prix = abs(nombre(brut["prix"]))
+    # Un relevé comptable ventile les entrées et les sorties en deux colonnes,
+    # dont une seule est servie par ligne.
+    montant = (abs(nombre(brut["montant"])) or abs(nombre(brut["credit"]))
+               or abs(nombre(brut["debit"])))
     frais = abs(nombre(brut["frais"]))
     devise = (brut["devise"] or devise_defaut).strip().upper()[:3] or devise_defaut
     resultat.update({"quantite": quantite, "prix": prix, "montant": montant,
@@ -326,6 +367,24 @@ def _interpreter(ligne, numero, correspondance, type_defaut, devise_defaut, inde
 
     sur_ligne = type_tx in ("achat", "vente")
     resultat["sur_ligne"] = sur_ligne
+
+    if type_tx == TYPE_DIVIDENDE:
+        # Le rapprochement sert ici au nom : « FR0000120271 » dans un relevé
+        # devient « TotalEnergies » si la ligne existe déjà au portefeuille.
+        trouvee = index_positions.get(_cle(brut["libelle"]))
+        if trouvee:
+            resultat["position_id"] = trouvee["id"]
+            resultat["position_nom"] = trouvee["nom"]
+        if montant <= 0:
+            resultat["message"] = ("Un dividende demande un montant : désignez la colonne "
+                                   "qui le porte (montant, crédit ou brut).")
+            return resultat
+        if not brut["libelle"]:
+            resultat["message"] = "Aucun libellé : un dividende se rattache à une ligne nommée."
+            return resultat
+        resultat["statut"] = "ok"
+        resultat["_signature"] = ("dividende", date, _cle(brut["libelle"]), round(montant, 2))
+        return resultat
 
     if sur_ligne:
         # Un relevé donne parfois le montant sans le prix unitaire : l'un se
@@ -366,10 +425,22 @@ def _interpreter(ligne, numero, correspondance, type_defaut, devise_defaut, inde
 
 def _ecrire(lignes, account_id, creer_positions, index_positions):
     """Inscrit les mouvements retenus, en créant au besoin les positions absentes."""
+    from backend.dividendes import add_dividende
     from backend.positions import create_position
 
     importes, touchees = 0, set()
     for ligne in lignes:
+        # Un dividende n'entre pas au journal : il alimente l'onglet Dividendes,
+        # d'où sortent le rendement par ligne et le revenu annuel.
+        if ligne["type"] == TYPE_DIVIDENDE:
+            add_dividende({
+                "date": ligne["date"], "account_id": account_id,
+                "nom": ligne["position_nom"] or ligne["libelle"],
+                "montant": ligne["montant"], "note": "Importé d'un relevé",
+            })
+            importes += 1
+            continue
+
         position_id = ligne["position_id"]
 
         if ligne["sur_ligne"] and not position_id:

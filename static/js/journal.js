@@ -273,7 +273,9 @@ export async function onImportFile(input) {
     ['prix', 'Prix unitaire', 'déduit du montant s\'il manque'],
     ['devise', 'Devise', ''],
     ['frais', 'Frais', ''],
-    ['montant', 'Montant', 'pour les versements et retraits'],
+    ['montant', 'Montant', 'pour les versements, retraits et dividendes'],
+    ['credit', 'Crédit', 'relevés qui séparent les entrées des sorties'],
+    ['debit', 'Débit', 'utilisé si montant et crédit sont vides'],
   ].map(([cle, libelle, aide]) => `
     <div class="form-group">
       <label>${esc(libelle)}${aide ? ` <span class="muted" style="font-weight:400">(${esc(aide)})</span>` : ''}</label>
@@ -293,7 +295,8 @@ export async function onImportFile(input) {
 
 function correspondanceSaisie() {
   const mapping = {};
-  for (const cle of ['date', 'type', 'libelle', 'quantite', 'prix', 'devise', 'frais', 'montant']) {
+  for (const cle of ['date', 'type', 'libelle', 'quantite', 'prix', 'devise', 'frais',
+                     'montant', 'credit', 'debit']) {
     const valeur = el(`imp-${cle}`)?.value;
     if (valeur !== '' && valeur != null) mapping[cle] = Number(valeur);
   }
@@ -325,7 +328,7 @@ export async function apercuImport() {
   afficherRapport(r);
   el('impEtape3').hidden = false;
   el('impValiderBtn').hidden = r.resume.a_importer === 0;
-  el('impValiderBtn').textContent = `Importer ${r.resume.a_importer} mouvement(s)`;
+  el('impValiderBtn').textContent = `Importer ${r.resume.a_importer} ligne(s)`;
 }
 
 /** Étape 3 : écrire. Le même code qu'à l'aperçu, `valider` en plus. */
@@ -345,8 +348,9 @@ export async function validerImport() {
     await rafraichir();
     el('impError').textContent = '';
     el('impBilan').innerHTML =
-      `<div class="hint-box" style="border-color:var(--green)">✓ ${r.resume.importes} mouvement(s) `
-      + 'inscrit(s) au journal. Quantités et prix de revient des lignes concernées ont été recalculés.</div>';
+      `<div class="hint-box" style="border-color:var(--green)">✓ ${r.resume.importes} ligne(s) `
+      + `enregistrée(s)${r.resume.dividendes ? `, dont ${r.resume.dividendes} dividende(s) dans l'onglet Dividendes` : ''}. `
+      + 'Quantités et prix de revient des lignes concernées ont été recalculés.</div>';
   } catch (e) {
     el('impError').textContent = e.message;
   }
@@ -357,7 +361,8 @@ function afficherRapport(r) {
   const s = r.resume;
   const puces = [
     `${s.a_importer} à importer`,
-    s.doublons ? `${s.doublons} déjà au journal` : '',
+    s.dividendes ? `dont ${s.dividendes} dividende(s)` : '',
+    s.doublons ? `${s.doublons} déjà enregistré(s)` : '',
     s.erreurs ? `${s.erreurs} en erreur` : '',
     s.positions_a_creer.length ? `${s.positions_a_creer.length} position(s) à créer : ${s.positions_a_creer.map(esc).join(', ')}` : '',
   ].filter(Boolean);
