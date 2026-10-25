@@ -413,6 +413,10 @@ def executer(contenu, account_id, correspondance, options=None, valider=False):
     """
     options = options or {}
     creer_positions = bool(options.get("creer_positions", True))
+    # « actuel » : la quantité saisie est celle d'aujourd'hui, l'ouverture se
+    # déduit à rebours. « ouverture » : elle précède le relevé. « non » : le
+    # journal importé fait seul la quantité.
+    conserver = (options.get("conserver_existant") or "actuel").strip().lower()
     type_defaut = (options.get("type_defaut") or "").strip().lower()
     devise_defaut = (options.get("devise_defaut") or "EUR").strip().upper()
 
@@ -458,12 +462,22 @@ def executer(contenu, account_id, correspondance, options=None, valider=False):
                 a_ecrire.append(compte_rendu)
         rapport.append(compte_rendu)
 
+    # Les ouvertures précèdent le contrôle de stock : ce qu'elles expliquent
+    # n'est plus une vente sans origine.
+    ouvertures = []
+    if conserver in ("actuel", "ouverture"):
+        with get_db() as db:
+            ouvertures = _ouvertures(db, a_ecrire, conserver)
+        reelles = [o for o in ouvertures if o["statut"] == "ouverture"]
+        a_ecrire = reelles + a_ecrire
+        rapport = ouvertures + rapport
     alertes = _controler_stocks(a_ecrire, quantites_connues)
 
     resume = {
         "total": len(rapport),
         "alertes": alertes,
-        "a_importer": sum(1 for l in rapport if l["statut"] in ("ok", "alerte")),
+        "ouvertures": sum(1 for o in ouvertures if o["statut"] == "ouverture"),
+        "a_importer": sum(1 for l in rapport if l["statut"] in ("ok", "alerte", "ouverture")),
         "doublons": sum(1 for l in rapport if l["statut"] == "doublon"),
         "erreurs": sum(1 for l in rapport if l["statut"] == "erreur"),
         "dividendes": sum(1 for l in a_ecrire if l["type"] == TYPE_DIVIDENDE),
@@ -612,6 +626,94 @@ def _interpreter(ligne, numero, correspondance, type_defaut, devise_defaut, inde
         date, type_tx, resultat["position_nom"] or brut["libelle"],
         quantite, resultat["prix"], resultat["montant"])
     return resultat
+
+
+def _ouvertures(db, a_ecrire, mode="actuel"):
+    """
+    Achats d'ouverture à inscrire pour les lignes déjà détenues sans journal.
+
+    Dès qu'un achat ou une vente est importé sur une position, le journal
+    devient la source de vérité de sa quantité : une saisie manuelle que rien
+    n'adosse à des mouvements serait écrasée, et une ligne de 330 titres dont
+    le relevé n'explique que les 80 derniers fondrait en silence.
+
+    Reste à savoir ce que dit la quantité saisie, et les deux lectures mènent
+    à des portefeuilles différents :
+
+      * `actuel` — c'est ce qui est détenu aujourd'hui, ce que montre l'onglet
+        Positions. L'ouverture se déduit alors à rebours des mouvements
+        importés, et le total ne bouge pas : l'import ajoute une histoire, pas
+        du capital.
+      * `ouverture` — c'est ce qui était détenu avant le relevé, dont les
+        mouvements s'ajoutent par-dessus.
+
+    L'ouverture est datée de la veille du premier mouvement importé qui
+    concerne la ligne : la seule date dont on soit sûr qu'elle précède tout ce
+    que le relevé raconte.
+    """
+    premiere_date, variation = {}, {}
+    for ligne in a_ecrire:
+        if not (ligne["sur_ligne"] and ligne["position_id"]):
+            continue
+        identifiant = ligne["position_id"]
+        if identifiant not in premiere_date or ligne["date"] < premiere_date[identifiant]:
+            premiere_date[identifiant] = ligne["date"]
+        signe = 1 if ligne["type"] == "achat" else -1
+        variation[identifiant] = variation.get(identifiant, 0.0) + signe * ligne["quantite"]
+    if not premiere_date:
+        return []
+
+    marques = ",".join("?" * len(premiere_date))
+    sans_journal = {
+        r["id"]: r for r in db.execute(f"""
+            SELECT p.id, p.nom, p.quantite, p.pru, p.devise, p.taux_change
+            FROM positions p
+            WHERE p.id IN ({marques}) AND p.quantite > 0 AND p.pru > 0
+              AND NOT EXISTS (SELECT 1 FROM transactions t
+                              WHERE t.position_id = p.id AND t.type IN ('achat','vente'))
+        """, list(premiere_date))
+    }
+
+    ouvertures = []
+    for identifiant, position in sans_journal.items():
+        detenue = position["quantite"]
+        quantite = detenue - variation.get(identifiant, 0.0) if mode == "actuel" else detenue
+        veille = (datetime.date.fromisoformat(premiere_date[identifiant])
+                  - datetime.timedelta(days=1)).isoformat()
+
+        if quantite <= 1e-9:
+            # Le relevé achète plus qu'il n'en reste : la saisie manuelle n'est
+            # pas la photo d'aujourd'hui, ou elle précède une partie du relevé.
+            # Rien à ouvrir, mais l'utilisateur doit savoir que sa quantité va
+            # être refaite à partir des seuls mouvements importés.
+            ouvertures.append({
+                "numero": 0, "date": veille, "type": "", "libelle": position["nom"],
+                "isin": "", "taux": None, "quantite": 0.0, "prix": 0.0,
+                "devise": position["devise"], "frais": 0.0, "montant": 0.0,
+                "position_id": identifiant, "position_nom": position["nom"],
+                "sur_ligne": False, "statut": "alerte",
+                "message": (
+                    f"{detenue:g} titres saisis, mais le relevé en achète "
+                    f"{variation.get(identifiant, 0.0):+g} net : la quantité sera refaite "
+                    "depuis le relevé seul. Vérifiez cette ligne après l'import."),
+            })
+            continue
+
+        ouvertures.append({
+            "numero": 0, "date": veille, "type": "achat", "libelle": position["nom"],
+            "isin": "", "taux": position["taux_change"], "quantite": quantite,
+            "prix": position["pru"], "devise": position["devise"], "frais": 0.0,
+            "montant": round(quantite * position["pru"], 2),
+            "position_id": identifiant, "position_nom": position["nom"],
+            "sur_ligne": True, "statut": "ouverture",
+            "message": (
+                f"{quantite:g} titres inscrits au {veille} : avec les mouvements du relevé, "
+                f"la ligne retombe sur les {detenue:g} titres détenus."
+                if mode == "actuel" else
+                f"{quantite:g} titres déjà détenus, inscrits au {veille} avant les "
+                "mouvements du relevé."),
+        })
+    return ouvertures
 
 
 def _controler_stocks(a_ecrire, quantites_connues):

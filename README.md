@@ -95,7 +95,14 @@ le versement sert aux enveloppes dont vous ne détaillez pas les lignes.
   réunit. Une ligne créée à l'import garde son ISIN, ce qui rend les imports suivants sûrs.
   Une vente portant sur plus de titres que le relevé n'en explique est signalée : c'est le
   signe d'un relevé qui commence après l'acquisition, et la plus-value qui en découlerait
-  serait fausse. Si le relevé donne le **taux de change** de chaque opération, il est repris
+  serait fausse.
+
+  Dès qu'un achat ou une vente est importé sur une ligne, **le journal devient la source de
+  vérité de sa quantité** : une saisie manuelle que rien n'adosse à des mouvements serait
+  écrasée. L'assistant demande donc ce que disent les quantités déjà saisies. Par défaut
+  elles sont *ce qui est détenu aujourd'hui* : la position d'ouverture se déduit à rebours
+  des mouvements importés, et le total ne bouge pas — l'import ajoute une histoire, pas du
+  capital. On peut aussi les déclarer antérieures au relevé, ou les ignorer. Si le relevé donne le **taux de change** de chaque opération, il est repris
   tel quel : le prix de revient est figé au cours du jour de l'achat, sans appel au marché.
   Deux lignes identiques d'un même fichier ne sont pas un doublon — un titre peut verser
   deux fois le même jour ; seul ce que la base contient déjà en est un, et autant de fois

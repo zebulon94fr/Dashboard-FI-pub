@@ -323,6 +323,7 @@ function correspondanceSaisie() {
 
 const optionsImport = () => ({
   creer_positions: el('impCreerPositions').checked,
+  conserver_existant: el('impConserver').value,
   type_defaut: el('impTypeDefaut').value,
   devise_defaut: el('impDeviseDefaut').value,
 });
@@ -380,22 +381,23 @@ function afficherRapport(r) {
   const puces = [
     `${s.a_importer} à importer`,
     s.dividendes ? `dont ${s.dividendes} dividende(s)` : '',
-    s.alertes ? `${s.alertes} vente(s) sans achat connu` : '',
+    s.ouvertures ? `${s.ouvertures} position(s) d'ouverture reconstituée(s)` : '',
+    s.alertes ? `${s.alertes} ligne(s) à vérifier` : '',
     s.doublons ? `${s.doublons} déjà enregistré(s)` : '',
     s.erreurs ? `${s.erreurs} en erreur` : '',
     s.positions_a_creer.length ? `${s.positions_a_creer.length} position(s) à créer : ${s.positions_a_creer.map(esc).join(', ')}` : '',
   ].filter(Boolean);
   el('impBilan').innerHTML = `<div class="hint-box">${s.total} ligne(s) lue(s) — ${puces.join(' · ')}.</div>`;
 
-  const TON = { ok: 'pos', alerte: 'attention', doublon: 'muted', erreur: 'neg' };
-  const ETIQUETTE = { ok: '✓', alerte: '⚠', doublon: '=', erreur: '✕' };
+  const TON = { ok: 'pos', ouverture: 'neu', alerte: 'attention', doublon: 'muted', erreur: 'neg' };
+  const ETIQUETTE = { ok: '✓', ouverture: '⊕', alerte: '⚠', doublon: '=', erreur: '✕' };
   el('impRapport').innerHTML =
     `<thead><tr>
       <th ${TH}>Ligne</th><th ${TH}></th><th ${TH}>Date</th><th ${TH}>Type</th>
       <th ${TH}>Libellé</th><th ${TH}>Détail</th><th ${TH}>Observation</th>
     </tr></thead><tbody>` +
     r.lignes.map(l => `<tr class="${TON[l.statut]}">
-      <td ${TD}>${l.numero}</td>
+      <td ${TD}>${l.numero || '—'}</td>
       <td ${TD}>${ETIQUETTE[l.statut]}</td>
       <td ${TD}>${l.date ? esc(fmtDate(l.date)) : '<span class="muted">—</span>'}</td>
       <td ${TD}>${esc(l.type || '—')}</td>
