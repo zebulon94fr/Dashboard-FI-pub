@@ -4,7 +4,7 @@ import datetime
 from catalog import ACCOUNT_TYPES, ORDRE_TYPES, TYPES_PASSIF
 from backend.db import get_db
 
-CHAMPS = ("nom", "type", "etablissement", "date_ouverture", "cible_pct",
+CHAMPS = ("nom", "type", "etablissement", "detenteur", "date_ouverture", "cible_pct",
           "frais_pct", "note", "ordre")
 
 
@@ -33,6 +33,11 @@ def _valide(payload, partiel=False):
 
     if "etablissement" in payload:
         out["etablissement"] = (payload.get("etablissement") or "").strip()[:80]
+
+    if "detenteur" in payload:
+        # Un plafond réglementaire se compte par personne : deux PEA dans un
+        # foyer, c'est deux fois 150 000 €, pas une.
+        out["detenteur"] = (payload.get("detenteur") or "").strip()[:60]
 
     if "note" in payload:
         out["note"] = (payload.get("note") or "").strip()[:500]
@@ -113,12 +118,23 @@ def list_accounts():
         # plafonné, pas ce qu'il est devenu.
         c["versements"] = verses.get(c["id"], 0.0)
         c["plafond"] = ACCOUNT_TYPES.get(c["type"], {}).get("plafond")
+        c["detenteur"] = (c.get("detenteur") or "").strip()
         # Un crédit porte son capital restant dû en positif : c'est à
         # l'affichage et au patrimoine net de lui donner son signe.
         c["passif"] = c["type"] in TYPES_PASSIF
         c["pv_realisee"] = round(pv_par_compte.get(c["id"], 0), 2)
         c["produit_ventes"] = realise.get(c["id"], 0) or 0
         comptes.append(c)
+
+    # Un plafond réglementaire se compte par personne et par type d'enveloppe :
+    # deux PEA dans un foyer, ce sont deux plafonds, et non un partagé.
+    cumuls = {}
+    for c in comptes:
+        cle = (c["type"], c["detenteur"])
+        cumuls[cle] = cumuls.get(cle, 0.0) + c["versements"]
+    for c in comptes:
+        c["versements_detenteur"] = round(cumuls[(c["type"], c["detenteur"])], 2)
+
     return comptes
 
 

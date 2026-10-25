@@ -187,6 +187,12 @@ export function openAccountModal(id = null) {
 
   document.getElementById('aNom').value = compte?.nom || '';
   document.getElementById('aEtablissement').value = compte?.etablissement || '';
+  document.getElementById('aDetenteur').value = compte?.detenteur || '';
+  // Les détenteurs déjà saisis, proposés en autocomplétion : deux orthographes
+  // d'un même prénom feraient deux personnes, et deux plafonds au lieu d'un.
+  document.getElementById('aDetenteurList').innerHTML =
+    [...new Set(comptes().map(c => c.detenteur).filter(Boolean))].sort()
+      .map(d => `<option value="${esc(d)}">`).join('');
   document.getElementById('aDateOuverture').value = compte?.date_ouverture || '';
   document.getElementById('aCible').value = compte?.cible_pct ? String(compte.cible_pct) : '';
   document.getElementById('aFrais').value = compte?.frais_pct ? String(compte.frais_pct) : '';
@@ -248,6 +254,7 @@ export async function saveAccount() {
     nom: document.getElementById('aNom').value.trim(),
     type: typeSelectionne,
     etablissement: document.getElementById('aEtablissement').value.trim(),
+    detenteur: document.getElementById('aDetenteur').value.trim(),
     date_ouverture: document.getElementById('aDateOuverture').value,
     cible_pct: parseNum(document.getElementById('aCible').value),
     frais_pct: parseNum(document.getElementById('aFrais').value),

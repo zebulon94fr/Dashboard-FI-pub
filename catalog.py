@@ -11,6 +11,28 @@ PRELEVEMENTS_SOCIAUX = 0.172   # CSG/CRDS et assimilés
 PFU_IR               = 0.128   # part impôt sur le revenu du prélèvement forfaitaire unique
 PFU                  = PRELEVEMENTS_SOCIAUX + PFU_IR   # « flat tax » : 30 %
 
+# Assurance vie après 8 ans : abattement annuel sur les gains rachetés, puis
+# impôt sur le revenu réduit. L'abattement est doublé pour un couple soumis à
+# imposition commune.
+AV_IR_REDUIT         = 0.075
+AV_ABATTEMENT_SEUL   = 4600
+AV_ABATTEMENT_COUPLE = 9200
+
+# Cryptoactifs : en deçà de ce total de cessions sur l'année civile, la
+# plus-value est exonérée. Le seuil porte sur le prix de cession, pas sur le gain.
+CRYPTO_SEUIL_CESSIONS = 305
+
+# Métaux précieux : taxe forfaitaire sur le prix de vente, ou régime des
+# plus-values réelles avec un abattement de 5 % par an au-delà de deux ans.
+METAUX_FORFAIT       = 0.115
+METAUX_PLUS_VALUE    = 0.362
+METAUX_ABATTEMENT_AN = 0.05
+METAUX_FRANCHISE_ANS = 2
+
+# Plus-value immobilière : deux barèmes d'abattement distincts, l'impôt sur le
+# revenu s'effaçant à 22 ans et les prélèvements sociaux seulement à 30 ans.
+IMMO_IR              = 0.19
+
 # ── Types de comptes proposés à la création ─────────────────────────────────
 # `modele_fiscal` désigne le simulateur utilisé par l'onglet Fiscalité ;
 # `seuil_ans` la durée de détention qui déclenche l'avantage fiscal (le cas

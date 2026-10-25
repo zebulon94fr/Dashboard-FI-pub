@@ -29,6 +29,7 @@ import {
 import { setPeriod, loadBenchmark, renderHistory, toggleBenchmark, setBenchmarkMode } from './history.js';
 import { loadSimulation, saveProfil, onProfilChange, simUpdate } from './simulation.js';
 import { showFiscTab, renderFiscalite, calcFisc } from './fiscalite.js';
+import { loadSortie, planifierRetrait, chargerCessions, exporterCessions } from './sortie.js';
 import { rbSliderChange, rbSauvegarderCibles, rbCalculer } from './rebalancing.js';
 import { loadAnalyse, setAnalysePeriod } from './analyse.js';
 import { saveKey, analyzeIA } from './ia.js';
@@ -151,6 +152,7 @@ Object.assign(window, {
   setPeriod, loadBenchmark, renderHistory, toggleBenchmark, setBenchmarkMode,
   loadSimulation, saveProfil, onProfilChange, simUpdate,
   showFiscTab, renderFiscalite, calcFisc,
+  loadSortie, planifierRetrait, chargerCessions, exporterCessions,
   rbSliderChange, rbSauvegarderCibles, rbCalculer,
   loadAnalyse, setAnalysePeriod,
   saveKey, analyzeIA,

@@ -89,7 +89,7 @@ def patrimoine():
     """
     with get_db() as db:
         rows = db.execute("""
-            SELECT a.id, a.nom, a.type, a.frais_pct,
+            SELECT a.id, a.nom, a.type, a.frais_pct, a.detenteur,
                    COALESCE(SUM(p.valorisation), 0) valorisation,
                    COUNT(p.id) nb_positions
             FROM accounts a LEFT JOIN positions p ON p.account_id = a.id
@@ -116,6 +116,7 @@ def patrimoine():
             "passif": est_passif,
             "compte_fi": not est_passif and r["type"] not in TYPES_HORS_CAPITAL_FI,
             "nb_positions": r["nb_positions"],
+            "detenteur": (r["detenteur"] or "").strip(),
         })
 
     return {
@@ -125,7 +126,39 @@ def patrimoine():
         "capital_fi": round(capital_fi, 2),
         "comptes": detail,
         "a_passif": passif > 0,
+        "detenteurs": _par_detenteur(detail),
     }
+
+
+def _par_detenteur(comptes):
+    """
+    Patrimoine net ventilé par personne du foyer.
+
+    Vide tant qu'aucun compte ne porte de détenteur : une ventilation à une
+    seule colonne n'apprendrait rien, et le champ n'est pas obligatoire.
+    """
+    if not any(c["detenteur"] for c in comptes):
+        return []
+
+    par_personne = {}
+    for compte in comptes:
+        nom = compte["detenteur"] or "Non attribué"
+        part = par_personne.setdefault(nom, {"detenteur": nom, "actif_brut": 0.0,
+                                             "passif": 0.0, "nb_comptes": 0})
+        if compte["passif"]:
+            part["passif"] += compte["valorisation"]
+        else:
+            part["actif_brut"] += compte["valorisation"]
+        part["nb_comptes"] += 1
+
+    ventilation = []
+    for part in par_personne.values():
+        ventilation.append({
+            **{k: round(v, 2) if isinstance(v, float) else v for k, v in part.items()},
+            "patrimoine_net": round(part["actif_brut"] - part["passif"], 2),
+        })
+    ventilation.sort(key=lambda p: -p["patrimoine_net"])
+    return ventilation
 
 
 # ══════════════════════════════════════════════════════════════

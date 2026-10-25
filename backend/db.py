@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     nom            TEXT    NOT NULL,              -- libellé libre : « PEA — mon courtier »
     type           TEXT    NOT NULL,              -- pea | cto | per | av | metaux | crypto
     etablissement  TEXT    DEFAULT '',            -- courtier, banque, assureur, plateforme…
+    detenteur      TEXT    DEFAULT '',            -- qui détient l'enveloppe, dans le foyer
     date_ouverture TEXT    DEFAULT '',            -- YYYY-MM-DD — sert aux règles fiscales
     cible_pct      REAL    DEFAULT 0,             -- allocation cible (onglet Rebalancing)
     frais_pct      REAL    DEFAULT 0,             -- frais de gestion annuels de l'enveloppe, en %
@@ -184,6 +185,7 @@ MIGRATIONS = [
     ("positions", "groupe", "TEXT DEFAULT ''"),
     ("positions", "ter", "REAL DEFAULT 0"),
     ("accounts", "frais_pct", "REAL DEFAULT 0"),
+    ("accounts", "detenteur", "TEXT DEFAULT ''"),
 ]
 
 

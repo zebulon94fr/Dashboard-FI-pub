@@ -252,6 +252,39 @@ Le calendrier fiscal affiche pour chaque enveloppe à seuil la date exacte du ca
 progression vers celle-ci. Les versements n'étant pas enregistrés, le plafond du PEA n'est
 en revanche pas contrôlé.
 
+### Sortir et déclarer
+
+Trois questions qu'une enveloppe prise isolément ne peut pas trancher, parce qu'elles se
+jouent sur l'ensemble du patrimoine ou sur l'année entière.
+
+- **D'où sortir une somme ?** Les enveloppes sont classées par **taux effectif** du retrait —
+  l'impôt rapporté à la somme retirée — et non par taux marginal : une enveloppe lourdement
+  taxée mais peu chargée en plus-values coûte parfois moins qu'une enveloppe exonérée
+  entièrement composée de gains. Le besoin est réparti en commençant par les moins taxées.
+  PER et immobilier sont écartés avec leur motif : l'un est bloqué, l'autre ne se vend pas par
+  tranches.
+
+- **Que reste-t-il en franchise cette année ?** L'abattement annuel de l'assurance vie après
+  8 ans (4 600 €, 9 200 € en couple) et le seuil de 305 € de cessions en cryptoactifs se
+  jugent sur l'année civile entière. L'abattement se consomme au fil d'un plan de retrait :
+  deux contrats rachetés la même année se partagent une seule franchise.
+
+- **Que déclarer ?** L'export reconstitue, cession par cession, ce que les formulaires
+  attendent — **2074** pour les valeurs mobilières, **2086** pour les actifs numériques —
+  au prix moyen pondéré depuis le journal. Une cession dont l'achat précède le journal porte
+  « à compléter » plutôt qu'un chiffre : sa plus-value est inconnue, pas nulle, et elle
+  n'entre donc pas dans les totaux.
+
+Ces simulations ignorent la tranche marginale et la situation personnelle. Elles servent à
+comparer deux guichets, pas à remplir une déclaration les yeux fermés.
+
+### Détenteur du compte
+
+Un plafond réglementaire se compte **par personne** : deux PEA dans un foyer, ce sont deux
+fois 150 000 €, et non un plafond partagé. Renseigner le détenteur d'un compte suffit à ce
+que le calendrier fiscal compte les versements par personne, et à ventiler le patrimoine net
+entre les membres du foyer.
+
 ## Types de comptes
 
 Chaque compte que vous créez porte un type. Celui-ci détermine l'unité des quantités, la
@@ -559,6 +592,10 @@ autre client peut donc piloter le dashboard de la même façon.
 | `GET` `POST` | `/api/transactions` | Journal des mouvements (filtres : compte, position, type, année) |
 | `PUT` `DELETE` | `/api/transactions/<id>` | Modification et suppression, avec recalcul du PMP |
 | `GET` | `/api/plus-values` | Plus-values réalisées reconstituées depuis le journal |
+| `GET` | `/api/fiscalite/retrait` | D'où sortir une somme au moindre coût fiscal |
+| `GET` | `/api/fiscalite/abattements` | Franchises consommées et restantes sur l'année |
+| `GET` | `/api/fiscalite/cessions` | Cessions de l'année, par formulaire |
+| `GET` | `/api/export/cessions` | Les mêmes au format CSV, prêtes à reporter |
 | `GET` | `/api/positions-sans-journal` | Positions dont le prix de revient n'est qu'une estimation |
 | `POST` | `/api/positions/<id>/ouverture` | Reconstitue l'achat d'ouverture, au taux de sa date |
 | `GET` `POST` | `/api/programmes` | Versements programmés |
@@ -595,6 +632,7 @@ Dashboard-FI-pub/
 │   ├── programmes.py          # Versements récurrents et leur échéancier
 │   ├── import_csv.py          # Reprise d'un relevé de courtier
 │   ├── tableur.py             # Lecture d'un classeur .xlsx, sans dépendance
+│   ├── fiscalite.py           # Barèmes français, plan de retrait, cessions à déclarer
 │   ├── performance.py         # Flux datés, TWR et TRI (XIRR)
 │   ├── analyse.py             # Risque, concentration, devises, contributions
 │   ├── rebalancing.py         # Allocation cible par classe et ordre d'arbitrage

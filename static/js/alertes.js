@@ -132,18 +132,20 @@ function construireAlertes() {
   // ── Plafond d'enveloppe en vue ─────────────────────────────
   // Un dépassement n'est pas qu'un chiffre : sur un PEA, il expose à la
   // clôture du plan. Mieux vaut le voir venir que le découvrir.
-  const plafonds = liste.filter(c => c.plafond > 0 && (c.versements || 0) >= c.plafond * SEUIL_PLAFOND);
-  for (const compte of plafonds) {
-    const depasse = compte.versements >= compte.plafond;
+  for (const groupe of groupesPlafond().filter(g => g.verses >= g.plafond * SEUIL_PLAFOND)) {
+    const depasse = groupe.verses >= groupe.plafond;
+    const titre = groupe.detenteur
+      ? `${typeInfo(groupe.type).label} de ${groupe.detenteur}`
+      : groupe.noms.join(', ');
     alertes.push({
       ton: depasse ? 'danger' : 'warn', icone: '🚧',
       titre: depasse
-        ? `${esc(compte.nom)} : plafond de versements dépassé`
-        : `${esc(compte.nom)} : ${partPct(compte.versements / compte.plafond)} du plafond de versements`,
-      texte: `${fmt(compte.versements)} versés sur ${fmt(compte.plafond)} autorisés. `
+        ? `${esc(titre)} : plafond de versements dépassé`
+        : `${esc(titre)} : ${partPct(groupe.verses / groupe.plafond)} du plafond de versements`,
+      texte: `${fmt(groupe.verses)} versés sur ${fmt(groupe.plafond)} autorisés. `
            + (depasse
              ? 'Un versement au-delà du plafond expose à la clôture du plan : régularisez auprès de l\'établissement.'
-             : `Il reste ${fmt(compte.plafond - compte.versements)} à verser. `
+             : `Il reste ${fmt(groupe.plafond - groupe.verses)} à verser. `
                + 'Les retraits ne libèrent pas de place : le plafond porte sur les versements cumulés.'),
     });
   }
@@ -236,11 +238,34 @@ export function renderAlertes() {
  * reste dans les clous. Sans aucun versement enregistré, mieux vaut le dire
  * que d'afficher un rassurant 0 %.
  */
-function lignePlafond(compte) {
-  const t = typeInfo(compte.type);
-  const verses = compte.versements || 0;
-  const plafond = compte.plafond;
-  const nom = `<span class="cal-name">${esc(t.icone)} ${esc(compte.nom)}</span>`;
+/**
+ * Enveloppes plafonnées, regroupées par type et par détenteur.
+ *
+ * Un plafond se compte par personne : deux PEA dans un foyer, ce sont deux
+ * fois 150 000 €. Les additionner sur une seule jauge annoncerait un
+ * dépassement là où chacun est encore dans les clous.
+ */
+function groupesPlafond() {
+  const groupes = new Map();
+  for (const c of comptes().filter(x => x.plafond > 0)) {
+    const cle = `${c.type}|${c.detenteur || ''}`;
+    if (!groupes.has(cle)) {
+      groupes.set(cle, { type: c.type, detenteur: c.detenteur || '', plafond: c.plafond,
+                         verses: c.versements_detenteur ?? c.versements ?? 0, noms: [] });
+    }
+    groupes.get(cle).noms.push(c.nom);
+  }
+  return [...groupes.values()];
+}
+
+function lignePlafond(groupe) {
+  const t = typeInfo(groupe.type);
+  const verses = groupe.verses || 0;
+  const plafond = groupe.plafond;
+  const titre = groupe.detenteur
+    ? `${t.label} — ${groupe.detenteur}`
+    : groupe.noms.join(', ');
+  const nom = `<span class="cal-name">${esc(t.icone)} ${esc(titre)}</span>`;
 
   if (!verses) {
     return `<div class="cal-row">${nom}
@@ -270,7 +295,7 @@ export function renderCalendrier() {
   if (!zone) return;
 
   const avecSeuil = comptes().filter(c => typeInfo(c.type).seuil_ans);
-  const avecPlafond = comptes().filter(c => c.plafond > 0);
+  const avecPlafond = groupesPlafond();
   if (!avecSeuil.length && !avecPlafond.length) {
     zone.innerHTML = '<div class="table-empty">Aucune de vos enveloppes n\'a de seuil de durée '
                    + '(le PEA, l\'assurance vie et les métaux précieux en ont un).</div>';

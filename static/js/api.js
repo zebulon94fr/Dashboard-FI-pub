@@ -81,6 +81,21 @@ export const api = {
   analyserImport: (p)         => post(`${BASE}/api/import/analyse`, p),
   executerImport: (p)         => post(`${BASE}/api/import/executer`, p),
 
+  // ── Fiscalité : sortir et déclarer ──
+  getPlanRetrait({ besoin, couple } = {}) {
+    const params = new URLSearchParams({ besoin: besoin || 0 });
+    if (couple) params.set('couple', '1');
+    return json(`${BASE}/api/fiscalite/retrait?${params}`);
+  },
+  getAbattements({ annee, couple } = {}) {
+    const params = new URLSearchParams();
+    if (annee) params.set('annee', annee);
+    if (couple) params.set('couple', '1');
+    return json(`${BASE}/api/fiscalite/abattements?${params}`);
+  },
+  getCessions:       (annee) => json(`${BASE}/api/fiscalite/cessions?annee=${annee || ''}`),
+  exportCessionsUrl: (annee) => `${BASE}/api/export/cessions?annee=${annee || ''}`,
+
   // ── Analyse et rééquilibrage ──
   getClasses:       ()     => json(`${BASE}/api/classes`),
   getAnalyse:       (days) => json(`${BASE}/api/analyse?days=${days}`),
