@@ -345,3 +345,100 @@ def record_price_history(points, ts):
         # la série quotidienne est conservée. Sans cette purge la table grossit
         # indéfiniment (une ligne par position et par actualisation).
         db.execute("DELETE FROM price_history WHERE ts < datetime('now','-90 days')")
+
+
+def record_closing_prices(ids_marche=(), jour=None):
+    """
+    Retient une clôture par position pour la journée : voir `cours_quotidiens`.
+
+    Appelée après l'actualisation, quand la table `positions` porte déjà les
+    cours et taux du moment. La dernière actualisation du jour écrase les
+    précédentes : c'est bien une clôture qu'on veut, pas une moyenne.
+
+    `ids_marche` énumère les positions dont le cours vient d'être téléchargé.
+    Les autres sont enregistrées aussi, marquées `saisi` : leur cours est
+    immobile, et les mesures de risque doivent pouvoir le dire plutôt que de
+    conclure à une volatilité nulle.
+
+    Retourne le nombre de clôtures écrites.
+    """
+    jour = jour or datetime.date.today().isoformat()
+    ids_marche = set(ids_marche)
+    ecrites = 0
+
+    with get_db() as db:
+        positions = db.execute(
+            "SELECT id, cours, taux_change, devise FROM positions WHERE cours > 0"
+        ).fetchall()
+
+        for p in positions:
+            taux = p["taux_change"] or (1.0 if (p["devise"] or "EUR") == "EUR" else None)
+            # Sans taux connu, le prix en euros serait faux : on préfère un trou
+            # dans la série, que les mesures savent signaler.
+            if not taux or taux <= 0:
+                continue
+            db.execute("""
+                INSERT INTO cours_quotidiens
+                  (date, position_id, cours, taux_change, prix_eur, devise, source)
+                VALUES (?,?,?,?,?,?,?)
+                ON CONFLICT(date, position_id) DO UPDATE SET
+                  cours=excluded.cours, taux_change=excluded.taux_change,
+                  prix_eur=excluded.prix_eur, devise=excluded.devise,
+                  source=excluded.source
+            """, (
+                jour, p["id"], round(p["cours"], 6), taux,
+                round(p["cours"] * taux, 6), p["devise"] or "EUR",
+                "marche" if p["id"] in ids_marche else "saisi",
+            ))
+            ecrites += 1
+
+    return ecrites
+
+
+def amorcer_clotures():
+    """
+    Reconstitue les clôtures passées depuis `price_history`, une fois.
+
+    `price_history` conserve 90 jours d'actualisations : de quoi démarrer les
+    mesures de risque sans attendre trois mois. On retient la dernière
+    actualisation de chaque journée, et on ne touche jamais à une clôture déjà
+    enregistrée — l'amorçage ne réécrit pas l'histoire.
+
+    Le taux de change, lui, n'est pas historisé par position : les lignes
+    reconstituées portent le taux du jour de l'amorçage, marqué `amorce`. Pour
+    une ligne en euros c'est exact ; pour une ligne en devise, la variation du
+    change manque sur la période reconstituée, ce que les mesures signalent.
+
+    Retourne (nb_clotures_ajoutees, nb_positions_concernees).
+    """
+    with get_db() as db:
+        # SQLite garantit que les colonnes nues d'un GROUP BY avec MAX() sont
+        # celles de la ligne retenue : on obtient la dernière actualisation
+        # de chaque journée, et non une valeur prise au hasard.
+        lignes = db.execute("""
+            SELECT ph.position_id, substr(ph.ts, 1, 10) jour, ph.cours, MAX(ph.ts) ts,
+                   p.taux_change, p.devise
+            FROM price_history ph
+            JOIN positions p ON p.id = ph.position_id
+            WHERE ph.cours > 0
+            GROUP BY ph.position_id, jour
+        """).fetchall()
+
+        ajoutees, positions = 0, set()
+        for ligne in lignes:
+            taux = ligne["taux_change"] or (1.0 if (ligne["devise"] or "EUR") == "EUR" else None)
+            if not taux or taux <= 0:
+                continue
+            cur = db.execute("""
+                INSERT OR IGNORE INTO cours_quotidiens
+                  (date, position_id, cours, taux_change, prix_eur, devise, source)
+                VALUES (?,?,?,?,?,?,'amorce')
+            """, (
+                ligne["jour"], ligne["position_id"], round(ligne["cours"], 6), taux,
+                round(ligne["cours"] * taux, 6), ligne["devise"] or "EUR",
+            ))
+            if cur.rowcount:
+                ajoutees += 1
+                positions.add(ligne["position_id"])
+
+    return ajoutees, len(positions)

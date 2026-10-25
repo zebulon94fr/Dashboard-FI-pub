@@ -360,6 +360,27 @@
         <table id="analyseConcentration" style="width:100%;font-size:13px;border-collapse:collapse"></table>
       </div>
 
+      <div class="section-title" style="font-size:15px;margin:24px 0 12px">D'où vient le risque</div>
+      <div class="cards" id="analyseRisqueKpis" style="margin-bottom:16px"></div>
+      <div id="analyseRisqueNote" class="hint-box" style="display:none"></div>
+      <div class="chart-box" style="margin-bottom:16px">
+        <div class="chart-title">Ce qui pèse, et ce qui risque</div>
+        <div class="chart-wrap h340"><canvas id="chartRisque"></canvas></div>
+        <div class="chart-hint">
+          Le poids dit combien d'argent une ligne représente ; la part du risque dit
+          combien de l'agitation du portefeuille vient d'elle. Les deux barres se
+          séparent dès qu'une ligne bouge plus que les autres, ou qu'elle monte et
+          descend en même temps qu'elles.
+        </div>
+      </div>
+      <div class="chart-box" style="margin-bottom:16px">
+        <table id="analyseRisque" style="width:100%;font-size:13px;border-collapse:collapse"></table>
+      </div>
+      <div class="chart-box" style="margin-bottom:16px">
+        <div class="chart-title">Corrélations entre les plus grosses lignes</div>
+        <div id="analyseCorrelations"></div>
+      </div>
+
       <div class="section-title" style="font-size:15px;margin:24px 0 12px">Devises</div>
       <div class="chart-grid">
         <div class="chart-box">
@@ -385,8 +406,21 @@
           se somme exactement à la performance du portefeuille.
         </div>
       </div>
-      <div class="chart-box">
+      <div class="chart-box" style="margin-bottom:16px">
         <table id="analyseContributions" style="width:100%;font-size:13px;border-collapse:collapse"></table>
+      </div>
+
+      <div class="section-title" style="font-size:15px;margin:24px 0 12px">Face aux indices</div>
+      <div class="chart-box">
+        <div class="chart-title">Écart de suivi et bêta</div>
+        <div id="analyseSuivi"><div class="chart-hint">Chargement des indices…</div></div>
+        <div class="chart-hint">
+          Superposer deux courbes dit si vous avez fait mieux ; cela ne dit pas si vous
+          avez fait mieux <strong>parce que vous avez pris plus de risque</strong>. Le bêta
+          dit de combien votre portefeuille amplifie l'indice, l'alpha ce qu'il reste
+          quand cette amplification est retirée, et l'écart de suivi de combien le
+          chemin a divergé en route.
+        </div>
       </div>
     </div>
   </div>

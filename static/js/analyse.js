@@ -1,10 +1,15 @@
-// Onglet Analyse : risque, concentration, exposition aux devises et
-// contribution à la performance. Toutes ces mesures viennent de /api/analyse,
-// calculé sur des rendements corrigés des flux.
+// Onglet Analyse : risque, concentration, exposition aux devises, contribution
+// à la performance, décomposition du risque et comparaison aux indices. Toutes
+// ces mesures sont calculées sur des rendements corrigés des flux.
+//
+// Trois appels, délibérément séparés : /api/analyse et /api/risque lisent la
+// base et répondent tout de suite, /api/suivi télécharge les indices et peut
+// prendre quelques secondes. Le dernier ne doit donc pas retenir les deux
+// premiers, et son échec ne doit pas vider la page.
 import { Store } from './state.js';
 import { api } from './api.js';
 import { fmt, fmtP, cls, esc, kpiCard, badgeType, destroyChart, makeChart, fmtChart } from './core.js';
-import { chartColors } from './theme.js';
+import { chartColors, cssVar } from './theme.js';
 
 let periode = 365;
 let DONNEES = null;
@@ -58,6 +63,9 @@ export async function loadAnalyse() {
   renderDevises(DONNEES.devises);
   renderContributions(DONNEES.contributions);
   renderClasses(DONNEES.classes);
+
+  chargerRisquePositions();
+  chargerSuivi();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -363,4 +371,263 @@ function renderClasses(rc) {
       <td ${TD} style="text-align:right" class="${cls(c.pv_latent)}">${fmt(c.pv_latent)}</td>
       <td ${TD} style="text-align:right">${c.nb_positions}</td>
     </tr>`).join('') + '</tbody>';
+}
+
+// ══════════════════════════════════════════════════════════════
+// D'OÙ VIENT LE RISQUE
+// ══════════════════════════════════════════════════════════════
+/** Couleur de série, lue dans le thème courant (voir --serie-* dans style.css). */
+const COULEUR_CAPITAL = () => cssVar('--serie-capital');
+const COULEUR_RISQUE = () => cssVar('--serie-risque');
+
+/** Teinte posée en transparence : l'intensité suit la force, pas le signe. */
+function teinte(hex, alpha) {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+
+async function chargerRisquePositions() {
+  const zone = el('analyseRisque');
+  if (!zone) return;
+  let d;
+  try {
+    d = await api.getRisque(periode);
+  } catch (e) {
+    el('analyseRisqueKpis').innerHTML = `<div class="form-error">${esc(e.message)}</div>`;
+    return;
+  }
+  renderRisquePositions(d);
+}
+
+function renderRisquePositions(d) {
+  const note = el('analyseRisqueNote');
+  note.innerHTML = d.message ? esc(d.message) : '';
+  note.style.display = d.message ? '' : 'none';
+
+  if (!d.lignes.length) {
+    el('analyseRisqueKpis').innerHTML = '';
+    el('analyseRisque').innerHTML =
+      `<tbody><tr><td class="table-empty">${esc(d.message || 'Mesure indisponible.')}</td></tr></tbody>`;
+    el('analyseCorrelations').innerHTML = '';
+    destroyChart('chartRisque');
+    note.style.display = 'none';
+    return;
+  }
+
+  el('analyseRisqueKpis').innerHTML =
+    kpiCard('Volatilité du portefeuille', pct(d.volatilite_portefeuille),
+      `${d.nb_observations} journée(s) exploitée(s)`, 'neu') +
+    kpiCard('Si tout bougeait ensemble', pct(d.volatilite_moyenne_ponderee),
+      'moyenne pondérée des lignes', 'neu') +
+    kpiCard('Ratio de diversification',
+      d.ratio_diversification == null ? '—' : nb(d.ratio_diversification, 2),
+      d.ratio_diversification > 1 ? 'le mélange amortit' : 'les lignes bougent ensemble',
+      d.ratio_diversification > 1.2 ? 'pos' : 'neu') +
+    kpiCard('Portefeuille couvert', pct(d.couverture),
+      d.ecartees.length ? `${d.ecartees.length} ligne(s) écartée(s)` : 'toutes les lignes',
+      d.couverture < 0.9 ? 'neg' : 'neu');
+
+  // Dix lignes par part de risque en valeur absolue : une ligne qui amortit le
+  // portefeuille mérite d'apparaître autant qu'une ligne qui l'agite.
+  const lignes = [...d.lignes]
+    .sort((a, b) => Math.abs(b.part_risque) - Math.abs(a.part_risque))
+    .slice(0, 10)
+    .sort((a, b) => b.part_risque - a.part_risque);
+
+  makeChart('chartRisque', {
+    type: 'bar',
+    data: {
+      labels: lignes.map(l => l.nom.length > 22 ? l.nom.slice(0, 22) + '…' : l.nom),
+      datasets: [
+        {
+          label: 'Part du capital',
+          data: lignes.map(l => +(l.poids * 100).toFixed(2)),
+          backgroundColor: COULEUR_CAPITAL(), borderRadius: 4,
+          borderColor: cssVar('--surface'), borderWidth: 2,
+        },
+        {
+          label: 'Part du risque',
+          data: lignes.map(l => +(l.part_risque * 100).toFixed(2)),
+          backgroundColor: COULEUR_RISQUE(), borderRadius: 4,
+          borderColor: cssVar('--surface'), borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: {
+        legend: { position: 'top', labels: { color: chartColors().muted, boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label} : ${nb(ctx.raw, 1)} %`,
+            afterLabel: ctx => {
+              const l = lignes[ctx.dataIndex];
+              return `Volatilité ${pct(l.volatilite)} · β ${nb(l.beta, 2)} · ${fmt(l.valorisation)}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().muted, callback: v => v + ' %' } },
+        y: { grid: { display: false }, ticks: { color: chartColors().muted, font: { size: 11 } } },
+      },
+    },
+  });
+
+  el('analyseRisque').innerHTML = `
+    <thead><tr>
+      <th ${TH}>Position</th><th ${TH}>Compte</th>
+      <th ${TH} style="text-align:right">Poids</th>
+      <th ${TH} style="text-align:right">Volatilité</th>
+      <th ${TH} style="text-align:right" title="De combien la ligne amplifie le portefeuille">β</th>
+      <th ${TH} style="text-align:right">Part du risque</th>
+      <th ${TH} style="text-align:right">Contribution</th>
+    </tr></thead><tbody>` +
+    d.lignes.map(l => `<tr>
+      <td ${TD}>${esc(l.nom)}${l.part_marche < 0.5
+        ? ' <span class="tag tag-mini" title="Cours saisi à la main : volatilité sous-estimée">cours saisi</span>' : ''}</td>
+      <td ${TD}>${badgeType(l.compte_type)} ${esc(l.compte)}</td>
+      <td ${TD} style="text-align:right">${pct(l.poids)}</td>
+      <td ${TD} style="text-align:right">${pct(l.volatilite)}</td>
+      <td ${TD} style="text-align:right">${nb(l.beta, 2)}</td>
+      <td ${TD} style="text-align:right;font-weight:700" class="${l.part_risque < 0 ? 'pos' : ''}">${pct(l.part_risque)}</td>
+      <td ${TD} style="text-align:right">${pct(l.contribution)}</td>
+    </tr>`).join('') +
+    `<tr class="tfoot">
+       <td ${TD} colspan="5">Total — la somme des contributions est la volatilité du portefeuille</td>
+       <td ${TD} style="text-align:right;font-weight:700">${pct(
+         d.lignes.reduce((a, l) => a + l.part_risque, 0))}</td>
+       <td ${TD} style="text-align:right;font-weight:700">${pct(d.volatilite_portefeuille)}</td>
+     </tr></tbody>`;
+
+  renderCorrelations(d);
+}
+
+function renderCorrelations(d) {
+  const zone = el('analyseCorrelations');
+  const c = d.correlations;
+
+  const ecartees = d.ecartees.length
+    ? `<div class="chart-hint" style="margin-top:10px;color:var(--yellow)">
+         Écartées faute d'historique continu : ${d.ecartees
+           .map(e => `<strong>${esc(e.nom)}</strong> (${esc(e.motif)})`).join(', ')}.
+         La mesure porte sur ${pct(d.couverture)} du portefeuille.
+       </div>`
+    : '';
+
+  if (!c) {
+    zone.innerHTML = '<div class="table-empty">Deux lignes au minimum sont nécessaires '
+      + 'pour une corrélation.</div>' + ecartees;
+    return;
+  }
+
+  const cellule = (valeur, a, b) => {
+    if (valeur == null) {
+      return `<td title="Corrélation indéfinie : ${esc(b)} n'a pas bougé sur la période">—</td>`;
+    }
+    const pole = valeur >= 0 ? COULEUR_RISQUE() : COULEUR_CAPITAL();
+    return `<td style="background:${teinte(pole, Math.min(0.6, Math.abs(valeur) * 0.6))}"
+      title="${esc(a)} / ${esc(b)} : ${nb(valeur, 2)}">${nb(valeur, 2)}</td>`;
+  };
+
+  const court = nom => nom.length > 18 ? nom.slice(0, 18) + '…' : nom;
+
+  zone.innerHTML = `
+    <div class="matrice-wrap"><table class="matrice">
+      <thead><tr><th></th>${c.noms.map(n =>
+        `<th title="${esc(n)}">${esc(court(n))}</th>`).join('')}</tr></thead>
+      <tbody>${c.matrice.map((rangee, i) => `<tr>
+        <th class="matrice-ligne" title="${esc(c.noms[i])}">${esc(court(c.noms[i]))}</th>
+        ${rangee.map((valeur, j) => i === j
+          ? '<td class="matrice-diagonale">1,00</td>'
+          : cellule(valeur, c.noms[i], c.noms[j])).join('')}
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <div class="chart-hint" style="text-align:left;margin-top:10px">
+      <span class="dot-legend" style="background:${COULEUR_RISQUE()}"></span>
+      Les deux lignes montent et descendent ensemble : elles ne se diversifient pas.
+      &nbsp;&nbsp;
+      <span class="dot-legend" style="background:${COULEUR_CAPITAL()}"></span>
+      Elles vont en sens inverse : l'une amortit l'autre.
+      La couleur donne la force, le chiffre la précision.
+    </div>
+    ${c.plus_correlees.length ? `
+      <div class="fisc-line" style="margin-top:10px">
+        <span>Les plus redondantes</span>
+        <span>${c.plus_correlees.slice(0, 3).map(p =>
+          `${esc(p.a)} / ${esc(p.b)} <strong>${nb(p.correlation, 2)}</strong>`).join(' · ')}</span>
+      </div>
+      <div class="fisc-line">
+        <span>Les plus complémentaires</span>
+        <span>${c.moins_correlees.slice(0, 3).map(p =>
+          `${esc(p.a)} / ${esc(p.b)} <strong>${nb(p.correlation, 2)}</strong>`).join(' · ')}</span>
+      </div>` : ''}
+    <div class="chart-hint" style="text-align:left">
+      ${c.nb_lignes} plus grosses lignes sur ${c.total_lignes} mesurées.
+    </div>
+    ${ecartees}`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// FACE AUX INDICES
+// ══════════════════════════════════════════════════════════════
+async function chargerSuivi() {
+  const zone = el('analyseSuivi');
+  if (!zone) return;
+  zone.innerHTML = '<div class="chart-hint">Chargement des indices…</div>';
+  let d;
+  try {
+    d = await api.getSuivi(periode);
+  } catch (e) {
+    zone.innerHTML = `<div class="form-error">${esc(e.message)}</div>`;
+    return;
+  }
+
+  if (!d.indices?.length) {
+    zone.innerHTML = `<div class="table-empty">${esc(d.message || d.error
+      || 'Comparaison indisponible.')}</div>`;
+    return;
+  }
+
+  // Le signe de l'alpha et de l'écart se lit en couleur ; le bêta et la
+  // captation sont des amplitudes, qui n'ont ni bon ni mauvais sens.
+  zone.innerHTML = `
+    <table style="width:100%;font-size:13px;border-collapse:collapse">
+      <thead><tr>
+        <th ${TH}>Indice</th>
+        <th ${TH} style="text-align:right" title="De combien le portefeuille amplifie l'indice">β</th>
+        <th ${TH} style="text-align:right" title="Ce qui reste quand l'exposition à l'indice est retirée">Alpha</th>
+        <th ${TH} style="text-align:right" title="Dispersion annualisée des écarts quotidiens">Écart de suivi</th>
+        <th ${TH} style="text-align:right" title="Performance active rapportée à l'écart de suivi">Ratio d'info.</th>
+        <th ${TH} style="text-align:right" title="Part des mouvements du portefeuille que l'indice explique">R²</th>
+        <th ${TH} style="text-align:right">Captation ↑ / ↓</th>
+        <th ${TH} style="text-align:right">Écart de performance</th>
+      </tr></thead>
+      <tbody>${d.indices.map(i => `<tr>
+        <td ${TD}>${esc(i.nom)}
+          <span class="tag tag-mini" title="${i.rendement === 'total'
+            ? 'Indice dividendes réinvestis : comparable à votre portefeuille'
+            : 'Indice de prix : il ignore les dividendes que vous encaissez'}">${
+            i.rendement === 'total' ? 'div. réinvestis' : 'hors dividendes'}</span></td>
+        <td ${TD} style="text-align:right;font-weight:600">${nb(i.beta, 2)}</td>
+        <td ${TD} style="text-align:right" class="${cls(i.alpha)}">${pct(i.alpha)}</td>
+        <td ${TD} style="text-align:right">${pct(i.tracking_error)}</td>
+        <td ${TD} style="text-align:right" class="${cls(i.ratio_information)}">${nb(i.ratio_information, 2)}</td>
+        <td ${TD} style="text-align:right">${pct(i.r2)}</td>
+        <td ${TD} style="text-align:right">${pct(i.capture_hausse)} / ${pct(i.capture_baisse)}</td>
+        <td ${TD} style="text-align:right;font-weight:700" class="${cls(i.ecart)}">${pct(i.ecart)}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <div class="chart-hint" style="text-align:left;margin-top:10px">
+      Sur ${d.nb_observations} journée(s) communes au portefeuille et aux indices.
+      Un bêta supérieur à 1 veut dire que vous amplifiez l'indice : une performance
+      supérieure est alors normale, et c'est l'alpha qui dit si elle est méritée.
+      Une captation de 120 % à la hausse et de 80 % à la baisse décrit un portefeuille
+      qui profite des montées sans subir toute la descente — ce que le bêta, moyenne
+      des deux, ne distingue pas.
+    </div>
+    ${d.message ? `<div class="chart-hint" style="text-align:left;color:var(--yellow)">${esc(d.message)}</div>` : ''}
+    ${d.ignores?.length ? `<div class="chart-hint" style="text-align:left">Indices écartés :
+      ${d.ignores.map(esc).join(', ')}.</div>` : ''}`;
 }

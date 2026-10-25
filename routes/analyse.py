@@ -3,6 +3,7 @@ from flask import Blueprint, jsonify, request
 from backend.analyse import analyse_complete, repartition_classes
 from backend.dividendes import rendements
 from backend.rebalancing import get_rebalancing, save_cibles_classes
+from backend.risque import contribution_risque
 from catalog import public_classes
 from routes.helpers import json_errors
 
@@ -20,6 +21,13 @@ def classes():
 def analyse():
     """Risque, concentration, devises, attribution et contributions."""
     return jsonify(analyse_complete(int(request.args.get("days", "365"))))
+
+
+@bp.route("/risque", methods=["GET"])
+@json_errors
+def risque():
+    """Contribution de chaque ligne au risque, et corrélations entre elles."""
+    return jsonify(contribution_risque(int(request.args.get("days", "365"))))
 
 
 @bp.route("/rendements", methods=["GET"])

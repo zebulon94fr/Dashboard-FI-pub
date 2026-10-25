@@ -175,6 +175,69 @@ constitué.
 Un bond de valorisation qu'aucun mouvement n'explique est compté comme une performance :
 c'est le signe qu'un versement manque au journal.
 
+#### D'où vient le risque
+
+Une ligne peut peser 10 % du capital et porter 30 % du risque : elle bouge plus que les
+autres, et elle monte quand elles montent. C'est elle, la vraie décision du portefeuille.
+
+La décomposition repose sur une identité exacte, pas sur une approximation : la somme des
+contributions **vaut** la volatilité du portefeuille, et le total du tableau l'affiche.
+
+| Mesure | Ce qu'elle répond |
+|---|---|
+| **Part du risque** | Poids de la ligne × son β face au portefeuille. Les parts se somment à 100 %, et une ligne qui va à l'inverse des autres porte une part négative : elle amortit |
+| **β de la ligne** | De combien elle amplifie le portefeuille. Au-dessus de 1, elle l'agite ; en dessous, elle le calme |
+| **Ratio de diversification** | Volatilité qu'aurait le portefeuille si tout bougeait ensemble, divisée par sa volatilité réelle. Au-dessus de 1, le mélange amortit |
+| **Corrélations** | Entre les douze plus grosses lignes, avec les paires les plus redondantes et les plus complémentaires |
+
+Deux précautions font la validité du calcul. Les rendements se calculent sur le **prix**, pas
+sur la valorisation : celle-ci bouge à chaque achat, et un renforcement passerait pour une
+journée à +40 %. Et la matrice de covariance est bâtie sur des **journées communes** à toutes
+les lignes retenues ; une ligne trop lacunaire est écartée plutôt qu'interpolée, et le
+dashboard annonce quelle part du portefeuille la mesure couvre réellement.
+
+Une ligne au cours saisi à la main ne bouge pas : elle ne porte aucun risque mesurable mais
+occupe sa part du capital, et dilue donc la volatilité d'autant. Le dashboard le signale et
+le chiffre — c'est le cas d'un bien immobilier, qui peut peser l'essentiel du patrimoine.
+
+#### Face aux indices
+
+Superposer deux courbes dit *si* vous avez fait mieux ; cela ne dit pas si vous avez fait
+mieux **parce que vous avez pris plus de risque**.
+
+| Mesure | Ce qu'elle répond |
+|---|---|
+| **β** | De combien votre portefeuille amplifie l'indice. Au-dessus de 1, une performance supérieure est normale — c'est l'alpha qui dit si elle est méritée |
+| **Alpha** | Ce qui reste quand cette amplification est retirée, annualisé |
+| **Écart de suivi** | Dispersion annualisée des écarts quotidiens : de combien le chemin a divergé en route |
+| **Ratio d'information** | Performance active rapportée à l'écart de suivi |
+| **R²** | Part de vos mouvements que l'indice explique |
+| **Captation ↑ / ↓** | 120 % à la hausse et 80 % à la baisse décrivent un portefeuille qui profite des montées sans subir toute la descente — ce que le β, moyenne des deux, ne distingue pas |
+
+Les indices sont reconvertis en euros avant comparaison, et le portefeuille entre par sa
+courbe de TWR : un versement ne se lit donc ni comme de l'alpha ni comme un écart de suivi.
+Un indice « prix » ignore les dividendes qu'il distribue alors que vous encaissez les vôtres :
+le dashboard l'étiquette plutôt que de vous laisser conclure d'un écart qui ne prouve rien.
+
+#### Amorcer les mesures sans attendre trois mois
+
+Ces deux vues vivent d'une série de prix par position, que le dashboard remplit à chaque
+actualisation des cours (table `cours_quotidiens`, conservée sans limite de durée). Il faut
+une vingtaine de séances avant qu'elles s'affichent.
+
+Pour démarrer tout de suite depuis l'historique déjà en base — `price_history` garde 90 jours
+d'actualisations :
+
+```bash
+python scripts/amorcer_clotures.py
+```
+
+Le script ne réécrit jamais une clôture déjà enregistrée : le relancer ne change rien, et il
+peut tourner sur une base en service. Deux limites qu'il annonce lui-même : seules les
+journées où les cours ont effectivement été actualisés sont reconstituées, et le taux de
+change n'étant pas historisé par position, les lignes en devise portent le taux du jour de
+l'amorçage — exact pour une ligne en euros, approché pour les autres.
+
 ### Allocation cible et rééquilibrage
 
 L'allocation se pilote **par classe d'actifs** (actions, obligations, monétaire, immobilier,
@@ -592,6 +655,8 @@ autre client peut donc piloter le dashboard de la même façon.
 | `GET` `POST` | `/api/transactions` | Journal des mouvements (filtres : compte, position, type, année) |
 | `PUT` `DELETE` | `/api/transactions/<id>` | Modification et suppression, avec recalcul du PMP |
 | `GET` | `/api/plus-values` | Plus-values réalisées reconstituées depuis le journal |
+| `GET` | `/api/risque` | Contribution de chaque ligne au risque, et corrélations entre elles |
+| `GET` | `/api/suivi` | β, alpha et écart de suivi face à chaque indice de référence |
 | `GET` | `/api/fiscalite/retrait` | D'où sortir une somme au moindre coût fiscal |
 | `GET` | `/api/fiscalite/abattements` | Franchises consommées et restantes sur l'année |
 | `GET` | `/api/fiscalite/cessions` | Cessions de l'année, par formulaire |
@@ -635,12 +700,13 @@ Dashboard-FI-pub/
 │   ├── fiscalite.py           # Barèmes français, plan de retrait, cessions à déclarer
 │   ├── performance.py         # Flux datés, TWR et TRI (XIRR)
 │   ├── analyse.py             # Risque, concentration, devises, contributions
+│   ├── risque.py              # Contribution au risque et corrélations, ligne par ligne
 │   ├── rebalancing.py         # Allocation cible par classe et ordre d'arbitrage
 │   ├── fi.py                  # Patrimoine net, frais réels, capital-cible et Coast FI
 │   ├── quotes.py              # Cours, taux de change et divisions de titres (yfinance)
 │   ├── stats.py               # Agrégats
 │   ├── dividendes.py          # Dividendes encaissés
-│   ├── benchmark.py           # Indices de comparaison, reconvertis en euros
+│   ├── benchmark.py           # Indices de comparaison, β et écart de suivi
 │   ├── export.py              # Export CSV
 │   ├── telegram.py            # Résumé Telegram
 │   ├── claude.py              # Appel à l'API Anthropic
@@ -663,6 +729,7 @@ Dashboard-FI-pub/
 │   ├── set_telegram.py        # Bot et chat_id Telegram
 │   ├── demo_data.py           # Portefeuille de démonstration
 │   ├── dedoublonner.py        # Ménage des dividendes et mouvements en double
+│   ├── amorcer_clotures.py    # Amorce la série de prix qui porte les mesures de risque
 │   ├── run_versements.sh      # Échéances dues des versements programmés
 │   └── migrate_portfoliofi.py # Reprise d'une base de l'ancienne version
 ├── deploy/                 # Unités systemd + modèle de /etc/default/dashboard-fi
@@ -682,11 +749,16 @@ allocations_classes            (cible par classe d'actifs, hors enveloppes)
 reglages                       (dépenses, épargne, horizon — le profil d'indépendance)
 versements_programmes          (mouvements récurrents, rattachés à un compte)
 
-accounts ──┬── positions ──── price_history
+accounts ──┬── positions ──┬── price_history      (actualisations, purgées à 90 jours)
+           │                └── cours_quotidiens   (une clôture par jour, conservée)
            ├── transactions ──── (position_id : achats et ventes)
            ├── dividendes
            └── history_daily / history_intraday   (account_id = 0 : total du portefeuille)
 ```
+
+`cours_quotidiens` est la série dont vivent les corrélations, la contribution au risque et
+le β : `price_history` suit les actualisations et se purge à 90 jours, elle sert à afficher
+la journée, pas à mesurer un risque.
 
 `transactions` est la source de vérité des positions qui en ont une : `quantite`, `pru` et
 `cout_eur` en sont dérivés à chaque écriture. Une position sans mouvement garde sa saisie

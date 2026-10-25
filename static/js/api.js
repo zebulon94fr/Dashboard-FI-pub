@@ -99,6 +99,8 @@ export const api = {
   // ── Analyse et rééquilibrage ──
   getClasses:       ()     => json(`${BASE}/api/classes`),
   getAnalyse:       (days) => json(`${BASE}/api/analyse?days=${days}`),
+  getRisque:        (days) => json(`${BASE}/api/risque?days=${days}`),
+  getSuivi:         (days) => json(`${BASE}/api/suivi?days=${days}`),
   getRendements:    ()     => json(`${BASE}/api/rendements`),
   getRebalancing({ apport = 0, bande = 0.25, ordre_min = 100 } = {}) {
     const params = new URLSearchParams({ apport, bande, ordre_min });

@@ -3,12 +3,19 @@
   --text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;
   --green:#3fb950;--red:#f85149;--yellow:#d29922;--purple:#bc8cff;
   --orange:#f0883e;--cyan:#39d353;--gold:#f5c518;
+  /* Couples de données de l'onglet Analyse. Chaque thème a ses propres pas,
+     choisis pour rester distinguables en vision des couleurs déficiente et
+     lisibles sur sa surface — ce ne sont pas les mêmes teintes éclaircies.
+     Capital/risque sont deux séries côte à côte ; corrélation est une échelle
+     divergente dont le milieu, à zéro, reste gris et sans teinte. */
+  --serie-capital:#1f6feb;--serie-risque:#db6d28;
 }
 [data-theme="light"]{
   --bg:#f6f8fa;--surface:#ffffff;--surface2:#f0f2f5;--border:#d0d7de;
   --text:#1f2328;--muted:#656d76;--accent:#0969da;
   --green:#1a7f37;--red:#cf222e;--yellow:#9a6700;--purple:#8250df;
   --orange:#bc4c00;--cyan:#0a7a58;--gold:#b86e00;
+  --serie-capital:#0969da;--serie-risque:#bc4c00;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 /* Sans cette règle, un `display` posé par une classe (.form-group, .cards…)
@@ -175,6 +182,9 @@ td.actions{display:flex;gap:4px}
 .chart-box .chart-wrap{position:relative;height:220px}
 .chart-box .chart-wrap.h180{height:180px}
 .chart-box .chart-wrap.h200{height:200px}
+/* Deux séries côte à côte sur dix catégories font vingt barres : dans 200 px
+   elles tombent à un pixel de large et ne se lisent plus. */
+.chart-box .chart-wrap.h340{height:340px}
 
 /* ── Historique ── */
 .history-controls{display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap}
@@ -300,3 +310,16 @@ input:focus,select:focus{border-color:var(--accent)}
 [data-theme="dark"] .sim-preset.active,[data-theme="dark"] .sim-preset:hover{color:#0d1117}
 .sim-check{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:3px 0}
 .sim-check input{accent-color:var(--accent)}
+
+/* ── Matrice de corrélation ──────────────────────────────────────────────── */
+/* Le fond de chaque case est la teinte du pôle posée en transparence sur la
+   surface : l'intensité suit la force de la corrélation, et zéro laisse la
+   surface nue — un milieu gris, jamais une troisième couleur. Le texte garde
+   l'encre du thème : la couleur porte la grandeur, le chiffre la précision. */
+.matrice{border-collapse:separate;border-spacing:2px;font-size:11px}
+.matrice th{color:var(--muted);font-weight:500;font-size:10.5px;padding:2px 6px;white-space:nowrap}
+.matrice th.matrice-ligne{text-align:right;max-width:150px;overflow:hidden;text-overflow:ellipsis}
+.matrice td{text-align:center;padding:6px 4px;border-radius:4px;color:var(--text);
+  background:var(--surface2);min-width:46px;font-variant-numeric:tabular-nums}
+.matrice td.matrice-diagonale{color:var(--muted)}
+.matrice-wrap{overflow-x:auto}

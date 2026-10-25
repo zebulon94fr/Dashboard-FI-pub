@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from backend.benchmark import get_benchmark
+from backend.benchmark import get_benchmark, suivi_indices
 from backend.performance import compute_tri, compute_tri_portefeuille, compute_twr
 from routes.helpers import json_errors
 
@@ -11,6 +11,13 @@ bp = Blueprint("benchmark", __name__, url_prefix="/api")
 @json_errors
 def benchmark():
     return jsonify(get_benchmark(int(request.args.get("days", "365"))))
+
+
+@bp.route("/suivi", methods=["GET"])
+@json_errors
+def suivi():
+    """Bêta, alpha et écart de suivi face à chaque indice de référence."""
+    return jsonify(suivi_indices(int(request.args.get("days", "365"))))
 
 
 @bp.route("/tri", methods=["GET"])

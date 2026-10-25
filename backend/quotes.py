@@ -10,7 +10,8 @@ import datetime
 import logging
 
 from backend.db import get_db
-from backend.positions import calculs, record_history, record_price_history
+from backend.positions import (calculs, record_closing_prices, record_history,
+                               record_price_history)
 from catalog import fx_ticker
 
 log = logging.getLogger("dashboard")
@@ -216,6 +217,12 @@ def fetch_quotes():
 
     if points:
         record_price_history(points, maintenant)
+
+    # Une clôture par position et par jour, conservée sans limite de durée :
+    # c'est la série dont vivent les corrélations et la contribution au risque
+    # (voir backend/risque.py). Elle est écrite même quand aucun cours n'a été
+    # téléchargé : un taux de change qui bouge fait bouger le prix en euros.
+    record_closing_prices({p[0] for p in points})
 
     usd_eur = taux.get("USD")
     record_history(usd_eur)

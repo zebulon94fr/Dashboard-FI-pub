@@ -114,6 +114,32 @@ CREATE TABLE IF NOT EXISTS price_history (
     variation   REAL    DEFAULT NULL
 );
 
+-- ── Clôtures quotidiennes par position ──────────────────────────────────────
+-- `price_history` suit les actualisations et se purge à 90 jours : elle sert à
+-- afficher la journée, pas à mesurer un risque. Cette table-ci garde une seule
+-- valeur par position et par jour, sans limite de durée, et c'est d'elle que
+-- sortent les corrélations, la contribution au risque et le bêta.
+--
+-- `prix_eur` est le cours converti en euros, soit `cours * taux_change`. C'est
+-- sur **lui** que se calculent les rendements, jamais sur la valorisation : la
+-- valorisation bouge à chaque achat ou vente, et un renforcement passerait pour
+-- une journée à +40 % qui polluerait toutes les corrélations.
+--
+-- `source` dit d'où vient la valeur : `marche` (cours téléchargé ce jour-là),
+-- `saisi` (cours entré à la main, donc immobile — volatilité nulle en trompe-
+-- l'œil) ou `amorce` (reconstituée depuis price_history au premier amorçage,
+-- avec le taux de change du jour de l'amorçage et non celui d'alors).
+CREATE TABLE IF NOT EXISTS cours_quotidiens (
+    date        TEXT    NOT NULL,                -- YYYY-MM-DD
+    position_id INTEGER NOT NULL REFERENCES positions(id) ON DELETE CASCADE,
+    cours       REAL    NOT NULL,                -- dans la devise de la position
+    taux_change REAL    DEFAULT 1.0,             -- devise -> EUR ce jour-là
+    prix_eur    REAL    NOT NULL,                -- cours * taux_change
+    devise      TEXT    DEFAULT 'EUR',
+    source      TEXT    DEFAULT 'marche',        -- marche | saisi | amorce
+    PRIMARY KEY (date, position_id)
+);
+
 -- ── Dividendes et revenus ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS dividendes (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -168,6 +194,7 @@ CREATE TABLE IF NOT EXISTS reglages (
 -- ── Index ───────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_positions_account   ON positions(account_id);
 CREATE INDEX IF NOT EXISTS idx_price_history_pos   ON price_history(position_id, ts);
+CREATE INDEX IF NOT EXISTS idx_clotures_date       ON cours_quotidiens(date);
 CREATE INDEX IF NOT EXISTS idx_intraday_ts         ON history_intraday(ts);
 CREATE INDEX IF NOT EXISTS idx_dividendes_date     ON dividendes(date);
 CREATE INDEX IF NOT EXISTS idx_dividendes_position ON dividendes(nom, account_id);
