@@ -222,7 +222,18 @@ export async function executerProgrammes() {
 // ══════════════════════════════════════════════════════════════
 // IMPORT D'UN RELEVÉ
 // ══════════════════════════════════════════════════════════════
-let fichier = { contenu: '', nom: '', analyse: null };
+let fichier = { contenu_b64: '', nom: '', analyse: null };
+
+/** Octets d'un fichier en base64, par tranches : `apply` cale sur un gros tableau. */
+async function enBase64(fichierChoisi) {
+  const octets = new Uint8Array(await fichierChoisi.arrayBuffer());
+  const TRANCHE = 0x8000;
+  let binaire = '';
+  for (let i = 0; i < octets.length; i += TRANCHE) {
+    binaire += String.fromCharCode.apply(null, octets.subarray(i, i + TRANCHE));
+  }
+  return btoa(binaire);
+}
 
 // Une seule liste : elle construit les menus de l'étape 2 et décide de ce qui
 // part au serveur. En tenir deux en parallèle, c'est oublier d'en servir une.
@@ -243,7 +254,7 @@ const CHAMPS_IMPORT = [
 
 export function openImportModal() {
   if (!comptes().length) { alert('Créez d\'abord un compte où importer les mouvements.'); return; }
-  fichier = { contenu: '', nom: '', analyse: null };
+  fichier = { contenu_b64: '', nom: '', analyse: null };
   el('impError').textContent = '';
   el('impFichier').value = '';
   el('impCompte').innerHTML = optionsComptes();
@@ -262,9 +273,11 @@ export async function onImportFile(input) {
   if (!choisi) return;
   el('impError').textContent = '';
   try {
-    fichier.contenu = await choisi.text();
+    // Les octets bruts plutôt que le texte : un classeur est binaire, et un
+    // CSV en latin-1 serait déjà abîmé par un décodage côté navigateur.
+    fichier.contenu_b64 = await enBase64(choisi);
     fichier.nom = choisi.name;
-    fichier.analyse = await api.analyserImport(fichier.contenu);
+    fichier.analyse = await api.analyserImport({ contenu_b64: fichier.contenu_b64 });
   } catch (e) {
     el('impError').textContent = e.message;
     el('impEtape2').hidden = true;
@@ -274,7 +287,7 @@ export async function onImportFile(input) {
   const a = fichier.analyse;
   el('impResume').innerHTML =
     `<strong>${esc(fichier.nom)}</strong> — ${a.nb_lignes} ligne(s), `
-    + `séparateur « ${a.separateur === '\t' ? 'tabulation' : esc(a.separateur)} », `
+    + `${a.separateur === 'xlsx' ? 'classeur Excel' : `séparateur « ${a.separateur === '\t' ? 'tabulation' : esc(a.separateur)} »`}, `
     + `${a.colonnes.length} colonne(s).`;
 
   const options = colonne => '<option value="">— aucune —</option>' +
@@ -320,7 +333,7 @@ export async function apercuImport() {
   let r;
   try {
     r = await api.executerImport({
-      contenu: fichier.contenu,
+      contenu_b64: fichier.contenu_b64,
       account_id: Number(el('impCompte').value),
       correspondance: correspondanceSaisie(),
       options: optionsImport(),
@@ -342,7 +355,7 @@ export async function validerImport() {
   bouton.disabled = true;
   try {
     const r = await api.executerImport({
-      contenu: fichier.contenu,
+      contenu_b64: fichier.contenu_b64,
       account_id: Number(el('impCompte').value),
       correspondance: correspondanceSaisie(),
       options: optionsImport(),

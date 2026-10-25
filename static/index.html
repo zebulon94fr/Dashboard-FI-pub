@@ -1039,8 +1039,8 @@
 
     <div class="form-row">
       <div class="form-group">
-        <label>Fichier CSV</label>
-        <input type="file" id="impFichier" accept=".csv,.txt,text/csv" onchange="onImportFile(this)">
+        <label>Fichier CSV ou Excel</label>
+        <input type="file" id="impFichier" accept=".csv,.txt,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onchange="onImportFile(this)">
       </div>
       <div class="form-group">
         <label>Compte de destination</label>
@@ -1048,8 +1048,8 @@
       </div>
     </div>
     <div class="hint-box">
-      Aucun courtier n'exporte le même fichier : le séparateur, les en-têtes et le format des
-      dates sont devinés, puis <strong>vous corrigez</strong>. Rien n'est écrit avant que
+      Aucun courtier n'exporte le même fichier. CSV ou classeur Excel, le séparateur, les
+      en-têtes et le format des dates sont devinés, puis <strong>vous corrigez</strong>. Rien n'est écrit avant que
       vous n'ayez vu, ligne par ligne, ce qui sera enregistré.
     </div>
 

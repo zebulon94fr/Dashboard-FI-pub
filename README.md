@@ -78,9 +78,15 @@ le versement sert aux enveloppes dont vous ne détaillez pas les lignes.
 
 #### Trois façons de le remplir sans tout ressaisir
 
-- **Importer un relevé CSV.** Aucun courtier n'exporte le même fichier : le séparateur,
-  l'encodage et le format des dates sont détectés, les colonnes reconnues par leurs en-têtes,
-  et la proposition reste corrigeable. L'aperçu montre chaque ligne avec son sort — à importer,
+- **Importer un relevé, CSV ou Excel.** Aucun courtier n'exporte le même fichier : le format
+  (CSV ou classeur `.xlsx`), le séparateur, l'encodage et le format des dates sont détectés,
+  les colonnes reconnues par leurs en-têtes, et la proposition reste corrigeable. Un classeur
+  se lit sans dépendance — c'est un zip de XML —, ses dates sérielles sont converties d'après
+  les styles qu'il déclare, et quantité comme prix se lisent au besoin dans la phrase de
+  l'opération (« Acheter 2 @ 458.25 USD ») quand le relevé n'en fait pas des colonnes.
+  La colonne qui porte le sens de l'opération est choisie sur son **contenu** et non sur son
+  titre : face à une colonne « Type » qui dit « Opération » et une colonne « Événement » qui
+  dit « Vendre 20 @ 243.56 USD », c'est la seconde qui décide. L'aperçu montre chaque ligne avec son sort — à importer,
   déjà au journal, ou en erreur et pourquoi. Aperçu et import empruntent le même code : ce qui
   est montré est exactement ce qui sera écrit. Les lignes déjà présentes sont reconnues, si
   bien que réimporter un relevé qui se chevauche ne crée pas de doublon. Les lignes sont
@@ -93,7 +99,10 @@ le versement sert aux enveloppes dont vous ne détaillez pas les lignes.
   tel quel : le prix de revient est figé au cours du jour de l'achat, sans appel au marché.
   Deux lignes identiques d'un même fichier ne sont pas un doublon — un titre peut verser
   deux fois le même jour ; seul ce que la base contient déjà en est un, et autant de fois
-  qu'elle le contient.
+  qu'elle le contient. Quand le relevé donne le montant réellement porté au compte sans
+  chiffrer les frais, leur écart avec quantité × prix × taux les chiffre, si bien que le prix
+  de revient enregistré retombe au centime sur celui du courtier. Une annulation
+  (« contre-passation ») n'est jamais reprise comme l'opération qu'elle annule.
 
 - **Reconstituer les prix de revient.** Les positions sans aucun achat au journal sont
   listées dans l'onglet Mouvements. Leur prix de revient en euros n'est qu'une estimation au
@@ -578,6 +587,7 @@ Dashboard-FI-pub/
 │   ├── transactions.py        # Journal, prix moyen pondéré, plus-values réalisées
 │   ├── programmes.py          # Versements récurrents et leur échéancier
 │   ├── import_csv.py          # Reprise d'un relevé de courtier
+│   ├── tableur.py             # Lecture d'un classeur .xlsx, sans dépendance
 │   ├── performance.py         # Flux datés, TWR et TRI (XIRR)
 │   ├── analyse.py             # Risque, concentration, devises, contributions
 │   ├── rebalancing.py         # Allocation cible par classe et ordre d'arbitrage

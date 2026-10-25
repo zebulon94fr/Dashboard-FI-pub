@@ -78,7 +78,7 @@ export const api = {
   deleteProgramme:    (id)    => json(`${BASE}/api/programmes/${id}`, { method: 'DELETE' }),
   executerProgrammes: ()      => post(`${BASE}/api/programmes/executer`, {}),
 
-  analyserImport: (contenu)   => post(`${BASE}/api/import/analyse`, { contenu }),
+  analyserImport: (p)         => post(`${BASE}/api/import/analyse`, p),
   executerImport: (p)         => post(`${BASE}/api/import/executer`, p),
 
   // ── Analyse et rééquilibrage ──

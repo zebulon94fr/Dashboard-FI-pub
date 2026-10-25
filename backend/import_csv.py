@@ -19,6 +19,7 @@ import unicodedata
 
 from backend.db import get_db
 from backend.positions import nombre
+from backend.tableur import ORIGINE as TABLEUR_ORIGINE, TableurError, est_classeur, lire_xlsx
 from backend.transactions import TransactionError, add_transaction, recalc_position
 from catalog import ORDRE_TRANSACTIONS
 
@@ -73,9 +74,10 @@ INDICES_COLONNES = {
 # entiers, et non comme de simples fragments : « rachat partiel » désigne un
 # retrait d'assurance-vie, et contient pourtant les lettres de « achat ».
 INDICES_TYPES = {
-    "vente":     ("vente", "vendu", "cession", "sell", "sale", "liquidation"),
+    "vente":     ("vente", "vendre", "vendu", "cession", "sell", "sale", "liquidation"),
     "retrait":   ("retrait", "rachat", "withdrawal", "sortie", "desinvestissement"),
-    "achat":     ("achat", "achete", "acquisition", "souscription", "buy", "purchase"),
+    "achat":     ("achat", "acheter", "achete", "acquisition", "souscription", "buy",
+                  "purchase"),
     "versement": ("versement", "virement", "depot", "deposit", "apport",
                   "alimentation", "contribution", "investissement"),
     # La taxe sur les transactions financières est un frais comme un autre du
@@ -128,7 +130,20 @@ def _decoder(contenu):
 
 
 def _lire(contenu):
-    """(en-têtes, lignes) du CSV, séparateur détecté. Lève une erreur parlante si illisible."""
+    """
+    (en-têtes, lignes, format) du fichier, qu'il soit CSV ou classeur.
+
+    Le format se reconnaît au contenu et non à l'extension : un fichier
+    renommé reste ce qu'il est, et un classeur commence toujours par la
+    signature d'une archive zip.
+    """
+    if est_classeur(contenu):
+        try:
+            entetes, lignes = lire_xlsx(contenu)
+        except TableurError as e:
+            raise TransactionError(str(e))
+        return entetes, lignes, "xlsx"
+
     texte = _decoder(contenu)
     if len(texte) > TAILLE_MAX:
         raise TransactionError(
@@ -186,6 +201,30 @@ def _colonnes_servies(lignes, maximum=200):
     return servies
 
 
+PART_TYPES_RECONNUS = 0.60      # au-delà, une colonne décrit bien des opérations
+
+
+def _colonne_types(normalises, lignes, maximum=200):
+    """
+    Colonne dont le contenu ressemble le plus à des types d'opération.
+
+    On lit les valeurs, pas l'en-tête : la colonne retenue est celle dont la
+    plupart des cases se reconnaissent en achat, vente, versement, retrait,
+    frais ou dividende. Sous `PART_TYPES_RECONNUS`, aucune ne convainc et
+    c'est aux mots-clés d'en-tête de trancher.
+    """
+    meilleure, meilleur_score = None, 0.0
+    for index in range(len(normalises)):
+        valeurs = [(l[index] or "").strip() for l in lignes[:maximum] if index < len(l)]
+        valeurs = [v for v in valeurs if v]
+        if not valeurs:
+            continue
+        score = sum(1 for v in valeurs if _type(v)) / len(valeurs)
+        if score > meilleur_score:
+            meilleure, meilleur_score = index, score
+    return meilleure if meilleur_score >= PART_TYPES_RECONNUS else None
+
+
 def _proposer_correspondance(entetes, lignes=()):
     """
     Colonne proposée pour chaque champ, par mots-clés d'en-tête.
@@ -200,6 +239,15 @@ def _proposer_correspondance(entetes, lignes=()):
     normalises = [_entete(e) for e in entetes]
     servies = _colonnes_servies(lignes) if lignes else set(range(len(entetes)))
     correspondance, prises = {}, set()
+
+    # Le sens d'une opération se reconnaît à ce qu'une colonne contient, pas à
+    # son titre : un relevé peut porter une colonne « Type » qui dit
+    # « Opération » et une colonne « Événement » qui dit « Acheter 2 @ 458.25 ».
+    # Seule la seconde décide, et seul son contenu le révèle.
+    colonne_types = _colonne_types(normalises, lignes)
+    if colonne_types is not None:
+        correspondance["type"] = colonne_types
+        prises.add(colonne_types)
 
     for exact, servie_dabord in ((True, True), (False, True), (True, False), (False, False)):
         for champ, indices in INDICES_COLONNES.items():
@@ -240,11 +288,40 @@ def _date(valeur):
             return datetime.datetime.strptime(texte, format_).date().isoformat()
         except ValueError:
             continue
+    # Un entier à cinq chiffres dans une colonne de dates est un numéro de
+    # série Excel qu'aucun style n'a signalé — le cas d'un CSV exporté depuis
+    # un tableur. La fourchette retenue couvre 1954 à 2064 : assez large pour
+    # un relevé, assez étroite pour ne pas prendre un montant pour une date.
+    if re.fullmatch(r"\d{5}", texte) and 20000 <= int(texte) <= 60000:
+        return (TABLEUR_ORIGINE + datetime.timedelta(days=int(texte))).isoformat()
     return None
+
+
+def _quantite_prix(texte):
+    """
+    Quantité et prix extraits d'un libellé d'opération, ou None.
+
+    Certains courtiers ne donnent ni colonne de quantité ni colonne de prix :
+    tout tient dans la phrase de l'opération — « Acheter 2 @ 458.25 USD ». La
+    forme « nombre @ nombre » est assez caractéristique pour être lue, et
+    assez rare pour ne rien capter d'autre par accident.
+    """
+    m = re.search(r"(-?[\d][\d\s.,]*)\s*@\s*([\d][\d\s.,]*)\s*([A-Za-z]{3})?", texte or "")
+    if not m:
+        return None
+    quantite, prix = abs(nombre(m.group(1))), abs(nombre(m.group(2)))
+    if quantite <= 0 or prix <= 0:
+        return None
+    return quantite, prix, (m.group(3) or "").upper()
 
 
 def _type(valeur, defaut=""):
     texte = _sans_accents(valeur or "").lower()
+    # Une annulation n'est pas l'opération qu'elle annule : la reprendre comme
+    # telle compterait deux fois un dividende que le courtier a repris.
+    if any(mot in texte for mot in ("contre-passation", "contre passation",
+                                    "annulation", "annule", "storno")):
+        return ""
     for type_tx, indices in INDICES_TYPES.items():
         if any(re.search(rf"\b{re.escape(indice)}", texte) for indice in indices):
             return type_tx
@@ -472,10 +549,23 @@ def _interpreter(ligne, numero, correspondance, type_defaut, devise_defaut, inde
         return resultat
 
     if sur_ligne:
+        # Faute de colonnes, quantité et prix se lisent dans la phrase de
+        # l'opération : « Acheter 2 @ 458.25 USD » les porte toutes les deux,
+        # et la devise avec.
+        if quantite <= 0 or prix <= 0:
+            extrait = _quantite_prix(brut["type"])
+            if extrait:
+                quantite = quantite or extrait[0]
+                prix = prix or extrait[1]
+                if extrait[2] and not brut["devise"]:
+                    devise = extrait[2]
+                resultat.update({"quantite": quantite, "prix": prix, "devise": devise})
+
         # Un relevé donne parfois le montant sans le prix unitaire : l'un se
         # déduit de l'autre dès que la quantité est connue.
         if quantite <= 0:
-            resultat["message"] = "Un achat ou une vente demande une quantité supérieure à zéro."
+            resultat["message"] = ("Un achat ou une vente demande une quantité supérieure "
+                                   "à zéro : désignez la colonne qui la porte.")
             return resultat
         if prix <= 0 and montant > 0:
             prix = round(montant / quantite, 6)
@@ -491,6 +581,18 @@ def _interpreter(ligne, numero, correspondance, type_defaut, devise_defaut, inde
         if trouvee:
             resultat["position_id"] = trouvee["id"]
             resultat["position_nom"] = trouvee["nom"]
+
+        # Quand le relevé donne le montant réellement porté au compte et
+        # qu'aucune colonne ne chiffre les frais, l'écart avec quantité × prix
+        # × taux les chiffre : un achat les paie en plus, une vente les retient
+        # sur le produit. Le garde-fou des 5 % écarte le cas d'une colonne
+        # « montant » qui compterait tout autre chose.
+        brut_eur = quantite * prix * (resultat["taux"] or 1.0)
+        if frais <= 0 and montant > 0 and brut_eur > 0:
+            ecart = abs(montant - brut_eur)
+            if ecart <= brut_eur * 0.05:
+                resultat["frais"] = round(ecart, 2)
+
         resultat["montant"] = round(quantite * prix, 2)
     else:
         if montant <= 0:
