@@ -89,7 +89,11 @@ le versement sert aux enveloppes dont vous ne détaillez pas les lignes.
   réunit. Une ligne créée à l'import garde son ISIN, ce qui rend les imports suivants sûrs.
   Une vente portant sur plus de titres que le relevé n'en explique est signalée : c'est le
   signe d'un relevé qui commence après l'acquisition, et la plus-value qui en découlerait
-  serait fausse.
+  serait fausse. Si le relevé donne le **taux de change** de chaque opération, il est repris
+  tel quel : le prix de revient est figé au cours du jour de l'achat, sans appel au marché.
+  Deux lignes identiques d'un même fichier ne sont pas un doublon — un titre peut verser
+  deux fois le même jour ; seul ce que la base contient déjà en est un, et autant de fois
+  qu'elle le contient.
 
 - **Reconstituer les prix de revient.** Les positions sans aucun achat au journal sont
   listées dans l'onglet Mouvements. Leur prix de revient en euros n'est qu'une estimation au
@@ -101,6 +105,12 @@ le versement sert aux enveloppes dont vous ne détaillez pas les lignes.
   tout seul, une fois par jour. L'exécution est rattrapante — un serveur arrêté deux semaines
   ne perd rien — et idempotente : la relancer ne double rien. Le jour du mois est borné à 28,
   le 31 n'existant pas partout.
+
+Un dividende saisi à la main puis réimporté depuis un relevé échappe à cette détection,
+les deux noms concordant rarement. `scripts/dedoublonner.py` rapproche alors sur la date et
+le montant, montre ce qu'il compte effacer, et n'efface qu'avec `--appliquer`. Il laisse
+intacts les groupes de même origine : deux lignes d'un même relevé sont deux opérations
+réelles.
 
 Les versements ainsi enregistrés servent aussi au **contrôle des plafonds** : le calendrier
 fiscal affiche le remplissage du PEA sur ses 150 000 €, et une alerte se déclenche à 90 %.
@@ -597,6 +607,7 @@ Dashboard-FI-pub/
 │   ├── set_password.py        # Authentification HTTP Basic
 │   ├── set_telegram.py        # Bot et chat_id Telegram
 │   ├── demo_data.py           # Portefeuille de démonstration
+│   ├── dedoublonner.py        # Ménage des dividendes et mouvements en double
 │   ├── run_versements.sh      # Échéances dues des versements programmés
 │   └── migrate_portfoliofi.py # Reprise d'une base de l'ancienne version
 ├── deploy/                 # Unités systemd + modèle de /etc/default/dashboard-fi

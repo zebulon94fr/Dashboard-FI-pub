@@ -9,9 +9,11 @@ L'import se fait en deux temps, par le même code : `executer(..., valider=False
 rend l'aperçu, `valider=True` écrit. Ce que montre l'aperçu est donc exactement
 ce qui sera enregistré, ligne par ligne, y compris les erreurs et les doublons.
 """
+import collections
 import csv
 import datetime
 import io
+import logging
 import re
 import unicodedata
 
@@ -20,11 +22,13 @@ from backend.positions import nombre
 from backend.transactions import TransactionError, add_transaction, recalc_position
 from catalog import ORDRE_TRANSACTIONS
 
+log = logging.getLogger("dashboard")
+
 # Colonnes que le journal sait utiliser. `libelle` sert à retrouver la position
 # concernée ; `montant`, `credit` et `debit` portent les mouvements d'espèces,
 # les relevés comptables ventilant les entrées et les sorties en deux colonnes.
-CHAMPS = ("date", "type", "libelle", "isin", "quantite", "prix", "devise", "frais",
-          "montant", "credit", "debit")
+CHAMPS = ("date", "type", "libelle", "isin", "quantite", "prix", "devise", "taux",
+          "frais", "montant", "credit", "debit")
 
 # Mots-clés cherchés dans les en-têtes. Un en-tête identique à un mot-clé
 # l'emporte toujours sur un en-tête qui le contient (voir _proposer_correspondance) :
@@ -54,6 +58,10 @@ INDICES_COLONNES = {
     "prix":     ("prix unitaire", "cours unitaire", "prix d execution", "cours",
                  "prix", "price", "px un brut", "px un"),
     "devise":   ("devise", "currency", "monnaie"),
+    # Le taux du jour de l'opération, quand le relevé le donne : il fige le prix
+    # de revient en euros au cours d'alors, sans interroger le marché — donc
+    # sans dépendre du réseau au moment de l'import, ni d'un taux approché.
+    "taux":     ("taux de change", "cours de change", "exchange rate", "fx rate", "taux"),
     "frais":    ("frais de courtage", "frais", "commission", "courtage", "fee", "fees"),
     "montant":  ("montant net", "montant brut", "montant total", "montant", "brut",
                  "net", "total", "amount"),
@@ -293,18 +301,25 @@ def _signature(date, type_tx, nom, quantite, prix, montant):
 
 
 def _signatures_existantes(db, account_id):
-    """Empreintes de tout ce que le compte porte déjà — journal et dividendes."""
-    connues = {
-        _signature(r["date"], r["type"], r["nom"], r["quantite"], r["prix"], r["montant_eur"])
-        for r in db.execute(
-            "SELECT date, type, nom, quantite, prix, montant_eur FROM transactions "
-            "WHERE account_id=?", (account_id,))
-    }
-    connues |= {
-        ("dividende", r["date"], _cle(r["nom"]), round(r["montant"], 2))
-        for r in db.execute(
-            "SELECT date, nom, montant FROM dividendes WHERE account_id=?", (account_id,))
-    }
+    """
+    Combien de fois le compte porte déjà chaque empreinte — journal et dividendes.
+
+    Un décompte, et non un ensemble : une même opération peut légitimement
+    figurer deux fois — deux dividendes d'un même titre versés le même jour —
+    et c'est le nombre d'exemplaires déjà en base qui dit combien d'un import
+    font doublon.
+    """
+    connues = collections.Counter()
+    for r in db.execute(
+        "SELECT date, type, nom, quantite, prix, montant_eur FROM transactions "
+        "WHERE account_id=?", (account_id,)
+    ):
+        connues[_signature(r["date"], r["type"], r["nom"], r["quantite"],
+                           r["prix"], r["montant_eur"])] += 1
+    for r in db.execute(
+        "SELECT date, nom, montant FROM dividendes WHERE account_id=?", (account_id,)
+    ):
+        connues[("dividende", r["date"], _cle(r["nom"]), round(r["montant"], 2))] += 1
     return connues
 
 
@@ -355,11 +370,14 @@ def executer(contenu, account_id, correspondance, options=None, valider=False):
                                     devise_defaut, index_positions)
         signature = compte_rendu.pop("_signature", None)
         if compte_rendu["statut"] == "ok":
-            if signature in deja_vues:
+            # Seul ce que la base contient déjà fait doublon, et autant de fois
+            # qu'elle le contient. Deux lignes identiques d'un même relevé sont
+            # deux opérations réelles : les confondre en supprimerait une.
+            if deja_vues.get(signature, 0) > 0:
+                deja_vues[signature] -= 1
                 compte_rendu["statut"] = "doublon"
                 compte_rendu["message"] = "Déjà présent au journal, à la même date et au même prix."
             else:
-                deja_vues.add(signature)
                 a_ecrire.append(compte_rendu)
         rapport.append(compte_rendu)
 
@@ -391,7 +409,7 @@ def _interpreter(ligne, numero, correspondance, type_defaut, devise_defaut, inde
     brut = {champ: _valeur(ligne, correspondance, champ) for champ in CHAMPS}
     resultat = {
         "numero": numero, "date": "", "type": "", "libelle": brut["libelle"],
-        "isin": brut["isin"].strip().upper(),
+        "isin": brut["isin"].strip().upper(), "taux": None,
         "quantite": 0.0, "prix": 0.0, "devise": devise_defaut, "frais": 0.0,
         "montant": 0.0, "position_id": None, "position_nom": "", "sur_ligne": False,
         "statut": "erreur", "message": "",
@@ -425,8 +443,10 @@ def _interpreter(ligne, numero, correspondance, type_defaut, devise_defaut, inde
                or abs(nombre(brut["debit"])))
     frais = abs(nombre(brut["frais"]))
     devise = (brut["devise"] or devise_defaut).strip().upper()[:3] or devise_defaut
+    taux = nombre(brut["taux"]) if brut["taux"] else 0.0
     resultat.update({"quantite": quantite, "prix": prix, "montant": montant,
-                     "frais": frais, "devise": devise})
+                     "frais": frais, "devise": devise,
+                     "taux": taux if taux > 0 else None})
 
     sur_ligne = type_tx in ("achat", "vente")
     resultat["sur_ligne"] = sur_ligne
@@ -525,6 +545,63 @@ def _controler_stocks(a_ecrire, quantites_connues):
     return alertes
 
 
+def _ecrire_ligne(ligne, account_id, creer_positions, index_positions, touchees,
+                  add_dividende, create_position):
+    """Écrit une ligne retenue, en créant au besoin la position absente."""
+    # Un dividende n'entre pas au journal : il alimente l'onglet Dividendes,
+    # d'où sortent le rendement par ligne et le revenu annuel.
+    if ligne["type"] == TYPE_DIVIDENDE:
+        add_dividende({
+            "date": ligne["date"], "account_id": account_id,
+            "nom": ligne["position_nom"] or ligne["libelle"],
+            "montant": ligne["montant"], "note": "Importé d'un relevé",
+        })
+        return
+
+    position_id = ligne["position_id"]
+
+    if ligne["sur_ligne"] and not position_id:
+        if not creer_positions:
+            raise TransactionError(
+                "Position absente du compte, et la création des lignes manquantes est désactivée.")
+        cle = _cle(ligne["isin"]) or _cle(ligne["libelle"])
+        connue = index_positions.get(cle) or index_positions.get(_cle(ligne["libelle"]))
+        if connue:
+            position_id = connue["id"]
+        else:
+            # Quantité et PRU restent à zéro : c'est le journal qui les
+            # établira au recalcul, à partir des mouvements importés.
+            position_id = create_position(account_id, {
+                "nom": ligne["libelle"][:120], "isin": ligne["isin"],
+                "quantite": 0, "pru": 0,
+                "cours": ligne["prix"], "devise": ligne["devise"],
+                "taux_change": 1.0 if ligne["devise"] == "EUR" else ligne["taux"],
+            })
+            nouvelle = {"id": position_id, "nom": ligne["libelle"],
+                        "ticker": "", "isin": ligne["isin"], "devise": ligne["devise"]}
+            index_positions[cle] = nouvelle
+            if _cle(ligne["isin"]):
+                index_positions[_cle(ligne["isin"])] = nouvelle
+
+    mouvement = {
+        "date": ligne["date"], "account_id": account_id, "type": ligne["type"],
+        "frais": ligne["frais"], "note": "Importé d'un relevé",
+    }
+    if ligne["sur_ligne"]:
+        mouvement.update({
+            "position_id": position_id, "quantite": ligne["quantite"],
+            "prix": ligne["prix"], "devise": ligne["devise"],
+            # Le taux du relevé, quand il est là : c'est celui du jour de
+            # l'opération, et il fige le prix de revient sans appel réseau.
+            "taux_change": ligne["taux"],
+        })
+        touchees.add(position_id)
+    else:
+        mouvement["montant"] = ligne["montant"]
+
+    add_transaction(mouvement)
+
+
 def _ecrire(lignes, account_id, creer_positions, index_positions):
     """Inscrit les mouvements retenus, en créant au besoin les positions absentes."""
     from backend.dividendes import add_dividende
@@ -532,55 +609,16 @@ def _ecrire(lignes, account_id, creer_positions, index_positions):
 
     importes, touchees = 0, set()
     for ligne in lignes:
-        # Un dividende n'entre pas au journal : il alimente l'onglet Dividendes,
-        # d'où sortent le rendement par ligne et le revenu annuel.
-        if ligne["type"] == TYPE_DIVIDENDE:
-            add_dividende({
-                "date": ligne["date"], "account_id": account_id,
-                "nom": ligne["position_nom"] or ligne["libelle"],
-                "montant": ligne["montant"], "note": "Importé d'un relevé",
-            })
-            importes += 1
+        try:
+            _ecrire_ligne(ligne, account_id, creer_positions, index_positions,
+                          touchees, add_dividende, create_position)
+        except Exception as e:
+            # Un import à moitié écrit sans rien dire serait pire qu'un refus :
+            # la ligne fautive est rapportée, les autres passent.
+            ligne["statut"] = "erreur"
+            ligne["message"] = f"Écriture impossible : {e}"
+            log.warning(f"Import, ligne {ligne['numero']} : {e}")
             continue
-
-        position_id = ligne["position_id"]
-
-        if ligne["sur_ligne"] and not position_id:
-            if not creer_positions:
-                continue
-            cle = _cle(ligne["isin"]) or _cle(ligne["libelle"])
-            connue = index_positions.get(cle) or index_positions.get(_cle(ligne["libelle"]))
-            if connue:
-                position_id = connue["id"]
-            else:
-                # Quantité et PRU restent à zéro : c'est le journal qui les
-                # établira au recalcul, à partir des mouvements importés.
-                position_id = create_position(account_id, {
-                    "nom": ligne["libelle"][:120], "isin": ligne["isin"],
-                    "quantite": 0, "pru": 0,
-                    "cours": ligne["prix"], "devise": ligne["devise"],
-                    "taux_change": 1.0 if ligne["devise"] == "EUR" else None,
-                })
-                nouvelle = {"id": position_id, "nom": ligne["libelle"],
-                            "ticker": "", "isin": ligne["isin"], "devise": ligne["devise"]}
-                index_positions[cle] = nouvelle
-                if _cle(ligne["isin"]):
-                    index_positions[_cle(ligne["isin"])] = nouvelle
-
-        mouvement = {
-            "date": ligne["date"], "account_id": account_id, "type": ligne["type"],
-            "frais": ligne["frais"], "note": "Importé d'un relevé",
-        }
-        if ligne["sur_ligne"]:
-            mouvement.update({
-                "position_id": position_id, "quantite": ligne["quantite"],
-                "prix": ligne["prix"], "devise": ligne["devise"],
-            })
-            touchees.add(position_id)
-        else:
-            mouvement["montant"] = ligne["montant"]
-
-        add_transaction(mouvement)
         importes += 1
 
     # `add_transaction` recalcule déjà la position à chaque écriture ; un

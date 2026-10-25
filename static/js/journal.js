@@ -234,6 +234,7 @@ const CHAMPS_IMPORT = [
   ['quantite', 'Quantité', ''],
   ['prix', 'Prix unitaire', 'déduit du montant s\'il manque'],
   ['devise', 'Devise', ''],
+  ['taux', 'Taux de change', 'celui du jour de l\'opération, s\'il figure au relevé'],
   ['frais', 'Frais', ''],
   ['montant', 'Montant', 'pour les versements, retraits et dividendes'],
   ['credit', 'Crédit', 'relevés qui séparent les entrées des sorties'],
