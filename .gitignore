@@ -11,5 +11,10 @@ certs/
 *.pem
 *.key
 backups/
+# Relevés de courtier et fichiers convertis : des données personnelles,
+# qui n'ont rien à faire dans un dépôt public.
+exports/
+*.xlsx
+releve*.csv
 .gunicorn/
 .cache/
