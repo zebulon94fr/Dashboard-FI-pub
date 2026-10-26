@@ -95,6 +95,31 @@ def _charger(period_days):
     return series, infos
 
 
+def _amorcage_recuperable():
+    """
+    Journées que `price_history` contient et que les clôtures n'ont pas encore.
+
+    Conseiller d'attendre quand l'historique dort déjà en base serait une perte
+    de temps : le script d'amorçage les reprend en une seconde.
+    """
+    with get_db() as db:
+        clotures = {r["date"] for r in db.execute("SELECT DISTINCT date FROM cours_quotidiens")}
+        actualisations = {r["jour"] for r in db.execute(
+            "SELECT DISTINCT substr(ts, 1, 10) jour FROM price_history WHERE cours > 0")}
+    return len(actualisations - clotures)
+
+
+def _conseil(jours_connus):
+    """Ce qu'il y a à faire pour que la mesure devienne possible."""
+    recuperables = _amorcage_recuperable()
+    if recuperables:
+        return (f" {recuperables} journée(s) d'actualisations dorment dans la base sans être "
+                "encore reprises comme clôtures : « python scripts/amorcer_clotures.py » les "
+                "récupère immédiatement.")
+    return (f" La série compte {jours_connus} journée(s) ; elle s'allonge d'une par "
+            "actualisation quotidienne, et cette page apparaîtra d'elle-même.")
+
+
 def _dates_communes(series, retenues):
     """Journées où toutes les lignes retenues ont un prix, du plus ancien au plus récent."""
     if not retenues:
@@ -157,7 +182,7 @@ def contribution_risque(period_days=365):
 
     vide = {
         "periode_jours": period_days, "nb_observations": 0, "lignes": [],
-        "correlations": None, "ecartees": [], "couverture": 0,
+        "correlations": None, "ecartees": [], "couverture": 0, "jours_connus": 0,
         "volatilite_portefeuille": None, "volatilite_moyenne_ponderee": None,
         "ratio_diversification": None, "base_annualisation": None,
         "minimum_observations": MIN_OBSERVATIONS,
@@ -165,7 +190,7 @@ def contribution_risque(period_days=365):
 
     valeur_totale = sum(i["valorisation"] for i in infos.values())
     if not series or not valeur_totale:
-        return {**vide, "message":
+        return {**vide, "jours_connus": 0, "message":
                 "Aucune clôture quotidienne enregistrée. Cette page se remplit à mesure que "
                 "les cours sont actualisés ; pour démarrer tout de suite depuis l'historique "
                 "déjà en base : python scripts/amorcer_clotures.py"}
@@ -190,11 +215,11 @@ def contribution_risque(period_days=365):
     dates = _dates_communes(series, retenues)
     if len(dates) < MIN_OBSERVATIONS + 1:
         return {**vide, "ecartees": ecartees, "nb_observations": max(0, len(dates) - 1),
+                "jours_connus": len(toutes_dates),
                 "message":
                 f"{max(0, len(dates) - 1)} rendement(s) commun(s) à toutes les lignes retenues : "
                 f"il en faut au moins {MIN_OBSERVATIONS} pour une matrice de covariance qui "
-                "veuille dire quelque chose. Laissez l'actualisation quotidienne constituer "
-                "l'historique — cette page apparaîtra d'elle-même."}
+                "veuille dire quelque chose." + _conseil(len(toutes_dates))}
 
     # Rendements alignés : une journée dont l'écart est trop long est retirée
     # pour toutes les lignes, afin que la matrice reste cohérente.

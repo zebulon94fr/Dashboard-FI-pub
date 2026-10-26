@@ -182,14 +182,33 @@ export function destroyChart(id) {
   if (Store.charts[id]) { Store.charts[id].destroy(); delete Store.charts[id]; }
 }
 
-/** Écrit un message centré directement sur un canvas (graphique vide ou indisponible). */
+/**
+ * Écrit un message centré directement sur un canvas (graphique vide ou indisponible).
+ *
+ * Sans graphique dessiné, le canvas garde sa surface de dessin par défaut —
+ * 300 x 150 — que le CSS étire à la taille de sa boîte : un texte de 13 px y
+ * était grossi trois fois et flou. On aligne donc la surface sur la taille
+ * réellement affichée, densité de l'écran comprise, avant d'écrire.
+ */
 export function messageCanvas(canvas, texte) {
+  const rect = canvas.getBoundingClientRect();
+  const largeur = rect.width || canvas.width;
+  const hauteur = rect.height || canvas.height;
+  const densite = window.devicePixelRatio || 1;
+
+  if (rect.width && rect.height) {
+    canvas.width = Math.round(largeur * densite);
+    canvas.height = Math.round(hauteur * densite);
+  }
+
   const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(densite, 0, 0, densite, 0, 0);
+  ctx.clearRect(0, 0, largeur, hauteur);
   ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
-  ctx.font = '13px sans-serif';
+  ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(texte, canvas.width / 2, Math.min(80, canvas.height / 2));
+  ctx.textBaseline = 'middle';
+  ctx.fillText(texte, largeur / 2, hauteur / 2);
 }
 
 /**

@@ -8,7 +8,8 @@
 // premiers, et son échec ne doit pas vider la page.
 import { Store } from './state.js';
 import { api } from './api.js';
-import { fmt, fmtP, cls, esc, kpiCard, badgeType, destroyChart, makeChart, fmtChart } from './core.js';
+import { fmt, fmtP, cls, esc, kpiCard, badgeType, destroyChart, makeChart, messageCanvas,
+         fmtChart } from './core.js';
 import { chartColors, cssVar } from './theme.js';
 
 let periode = 365;
@@ -406,12 +407,27 @@ function renderRisquePositions(d) {
   note.style.display = d.message ? '' : 'none';
 
   if (!d.lignes.length) {
+    // Un graphique vide sans un mot est indiscernable d'un graphique cassé.
+    // L'explication complète va dans l'encadré du haut, et chaque boîte
+    // affiche là où on la regarde de quoi comprendre qu'elle se remplira.
     el('analyseRisqueKpis').innerHTML = '';
-    el('analyseRisque').innerHTML =
-      `<tbody><tr><td class="table-empty">${esc(d.message || 'Mesure indisponible.')}</td></tr></tbody>`;
-    el('analyseCorrelations').innerHTML = '';
+    note.innerHTML = esc(d.message || 'Mesure indisponible.');
+    note.style.display = '';
+
+    const attendu = d.minimum_observations || 20;
+    const avancement = d.nb_observations
+      ? `${d.nb_observations} journée${d.nb_observations > 1 ? 's' : ''} sur les ${attendu} nécessaires`
+      : 'Aucune clôture quotidienne enregistrée pour l\'instant';
+
     destroyChart('chartRisque');
-    note.style.display = 'none';
+    const canvas = el('chartRisque');
+    if (canvas) messageCanvas(canvas, avancement);
+
+    el('analyseRisque').innerHTML =
+      `<tbody><tr><td class="table-empty">${esc(avancement)} — voir l'explication ci-dessus.</td></tr></tbody>`;
+    el('analyseCorrelations').innerHTML =
+      `<div class="table-empty">${esc(avancement)}. Les corrélations apparaîtront en même temps
+       que la contribution au risque.</div>`;
     return;
   }
 
