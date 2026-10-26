@@ -27,7 +27,7 @@ import {
   openImportModal, closeImportModal, onImportFile, apercuImport, validerImport,
 } from './journal.js';
 import { setPeriod, loadBenchmark, renderHistory, toggleBenchmark, setBenchmarkMode,
-         ouvrirRapportMensuel, ouvrirRapportEcoule } from './history.js';
+         ouvrirRapportMensuel, ouvrirRapportPeriode } from './history.js';
 import { loadSimulation, saveProfil, onProfilChange, simUpdate } from './simulation.js';
 import { showFiscTab, renderFiscalite, calcFisc } from './fiscalite.js';
 import { loadSortie, planifierRetrait, chargerCessions, exporterCessions } from './sortie.js';
@@ -135,7 +135,7 @@ async function init() {
 // ══════════════════════════════════════════════════════════════
 Object.assign(window, {
   showTab, showAccount, toggleTheme, toggleHide, toggleComptesMenu, toggleSidebar,
-  refreshQuotes, sendTelegramSummary, ouvrirRapportMensuel, ouvrirRapportEcoule,
+  refreshQuotes, sendTelegramSummary, ouvrirRapportMensuel, ouvrirRapportPeriode,
   openAccountModal, closeAccountModal, saveAccount, selectAccountType,
   editCurrentAccount, deleteCurrentAccount, delPos,
   openPositionModal, closeModal, savePosition, onPositionAccountChange,

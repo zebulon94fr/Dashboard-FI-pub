@@ -9,7 +9,7 @@ calculé dans le navigateur.
 import datetime
 import html
 
-from backend.rapport import ECART_SIGNALE_PTS, libelle
+from backend.rapport import ECART_SIGNALE_PTS, SANS_LIMITE, libelle
 from catalog import TYPES_TRANSACTION
 
 # Teintes reprises du dashboard, avec un équivalent clair pour l'impression.
@@ -67,6 +67,7 @@ tfoot td{font-weight:600;background:var(--surface)}
   padding-top:14px;border-top:1px solid var(--trait)}
 .nav a{color:var(--accent);text-decoration:none}
 .nav a:hover{text-decoration:underline}
+.nav .courant{color:var(--encre);font-weight:600}
 .courbe{width:100%;height:120px;display:block;margin:4px 0 2px}
 @media print{
   .tableau{overflow:visible}
@@ -135,13 +136,17 @@ def _periode(rapport):
     """
     Période réellement couverte, et non les bornes du mois.
 
-    Un mois en cours s'arrête au dernier jour connu : afficher « du 1er au 31 »
-    laisserait croire à un mois complet, et sa variation se comparerait à tort
-    à celle d'un mois plein.
+    Une période qui court encore s'arrête au dernier jour connu, et une fenêtre
+    glissante peut commencer avant le premier jour connu. Afficher ses bornes
+    théoriques laisserait croire à une période complète, et sa variation se
+    comparerait à tort à celle d'une période pleine.
     """
+    debut = rapport.get("debut_couvert") or rapport["debut"]
     fin = rapport.get("fin_couverte") or rapport["fin"]
-    periode = f"Du {_jour(rapport['debut'])} au {_jour(fin)}"
-    if rapport.get("en_cours"):
+    periode = f"Du {_jour(debut)} au {_jour(fin)}"
+    # La mention ne vaut que pour un mois : une fenêtre glissante s'arrête à
+    # aujourd'hui par construction, le dire n'apprendrait rien.
+    if rapport.get("en_cours") and rapport.get("mois"):
         periode += " — <strong>mois en cours</strong>"
     return f"{periode} · établi le {_jour(rapport['genere_le'])}"
 
@@ -402,10 +407,38 @@ def _section_allocation(rapport):
 # ══════════════════════════════════════════════════════════════
 # PAGE
 # ══════════════════════════════════════════════════════════════
+# Périodes proposées en pied de page d'un rapport glissant : les mêmes que
+# celles de l'onglet Historique, pour qu'on retrouve ce qu'on y a choisi.
+PERIODES = (30, 90, 180, 365, SANS_LIMITE)
+
+
+def _navigation(rapport, base_url):
+    """
+    Pied de page : les mois voisins pour un rapport mensuel, les autres
+    fenêtres pour un rapport glissant. Dans les deux cas, la page reste
+    parcourable sans revenir au dashboard.
+    """
+    if rapport.get("mois"):
+        avant, apres = _voisins(rapport["mois"])
+        return (f'<a href="{base_url}/rapport/{avant}">← {html.escape(libelle(avant))}</a>'
+                f'<a href="{base_url}/rapport/{apres}">{html.escape(libelle(apres))} →</a>')
+
+    courant = rapport.get("jours")
+    liens = []
+    for jours in PERIODES:
+        # Mêmes étiquettes que les boutons de l'onglet Historique, pour qu'on
+        # reconnaisse la fenêtre qu'on vient d'y choisir.
+        etiquette = "Tout" if jours >= SANS_LIMITE else (
+            f"{jours // 365}A" if jours % 365 == 0 else f"{jours // 30}M")
+        liens.append(f'<span class="courant">{html.escape(etiquette)}</span>' if jours == courant
+                     else f'<a href="{base_url}/rapport?jours={jours}">{html.escape(etiquette)}</a>')
+    return "".join(liens)
+
+
 def page_rapport(rapport, base_url=""):
-    """Rapport mensuel complet, en une page HTML autonome."""
-    avant, apres = _voisins(rapport["mois"])
-    titre = f"Rapport mensuel — {rapport['libelle']}"
+    """Rapport complet d'une période, en une page HTML autonome."""
+    titre = (f"Rapport mensuel — {rapport['libelle']}" if rapport.get("mois")
+             else f"Rapport sur {rapport['libelle']}")
 
     return f"""<!doctype html>
 <html lang="fr">
@@ -428,8 +461,7 @@ def page_rapport(rapport, base_url=""):
   {_section_mouvements(rapport)}
   {_section_dividendes(rapport)}
   <div class="nav">
-    <a href="{base_url}/rapport/{avant}">← {html.escape(libelle(avant))}</a>
-    <a href="{base_url}/rapport/{apres}">{html.escape(libelle(apres))} →</a>
+    {_navigation(rapport, base_url)}
     <a href="{base_url}/">Retour au dashboard</a>
   </div>
 </div>

@@ -240,15 +240,22 @@ l'amorçage — exact pour une ligne en euros, approché pour les autres.
 
 ### Rapport mensuel
 
-Une page datable, autonome et imprimable : `/rapport/2026-09` pour un mois précis, `/rapport`
-pour le dernier mois complet. Deux boutons y mènent, et leur libellé dit lequel ils ouvrent —
-**📄 Rapport mensuel** dans le bandeau pour le mois en cours, **📄 Rapport du mois écoulé**
-dans l'onglet *Historique* pour le dernier mois complet. Les liens de pied de page mènent aux
-mois voisins, quelle que soit la porte d'entrée.
+Une page datable, autonome et imprimable, sur un mois ou sur une fenêtre glissante :
 
-Un mois encore en cours s'annonce comme tel et s'arrête au dernier jour connu : afficher
-« du 1er au 31 » laisserait croire à un mois complet, et sa variation se comparerait à tort
-à celle d'un mois plein.
+| Depuis | Porte sur | URL |
+|---|---|---|
+| **📄 Rapport mensuel**, dans le bandeau | le mois en cours | `/rapport/2026-10` |
+| **📄 Rapport**, dans l'onglet *Historique* | la période sélectionnée à l'écran (1M, 3M, 6M, 1A, Tout) | `/rapport?jours=90` |
+| L'envoi Telegram du 1er | le dernier mois complet | `/rapport` |
+
+Le bouton de l'onglet *Historique* suit la période choisie pour la courbe : changer de
+période change le rapport, sans avoir à le redemander. Les liens de pied de page mènent aux
+mois voisins pour un rapport mensuel, aux autres fenêtres pour un rapport glissant.
+
+Un mois encore en cours s'annonce comme tel, et toute période s'arrête au dernier jour connu
+— tout en partant du premier, si la fenêtre remonte avant le début de l'historique. Afficher
+ses bornes théoriques laisserait croire à une période complète, et sa variation se
+comparerait à tort à celle d'une période pleine.
 
 Elle répond à la seule question qui vaille à cette échéance : sur ce que le patrimoine a
 bougé ce mois-ci, **quelle part vient du marché et quelle part de votre épargne ?** Un mois
@@ -703,8 +710,8 @@ autre client peut donc piloter le dashboard de la même façon.
 | `GET` | `/api/plus-values` | Plus-values réalisées reconstituées depuis le journal |
 | `GET` | `/api/risque` | Contribution de chaque ligne au risque, et corrélations entre elles |
 | `GET` | `/api/suivi` | β, alpha et écart de suivi face à chaque indice de référence |
-| `GET` | `/rapport` `/rapport/<mois>` | Rapport mensuel, en page HTML autonome |
-| `GET` | `/api/rapport` | Les mêmes données en JSON |
+| `GET` | `/rapport` `/rapport/<mois>` `/rapport?jours=90` | Rapport d'un mois ou d'une période, en page HTML autonome |
+| `GET` | `/api/rapport` | Les mêmes données en JSON (`?mois=` ou `?jours=`) |
 | `GET` | `/api/rapport/mois-disponibles` | Mois couverts par l'historique |
 | `POST` | `/api/telegram/rapport` | Envoie le rapport du mois écoulé sur Telegram |
 | `GET` | `/api/fiscalite/retrait` | D'où sortir une somme au moindre coût fiscal |
@@ -751,7 +758,7 @@ Dashboard-FI-pub/
 │   ├── performance.py         # Flux datés, TWR et TRI (XIRR)
 │   ├── analyse.py             # Risque, concentration, devises, contributions
 │   ├── risque.py              # Contribution au risque et corrélations, ligne par ligne
-│   ├── rapport.py             # Rapport mensuel : marché contre épargne
+│   ├── rapport.py             # Rapport d'une période : marché contre épargne
 │   ├── rapport_html.py        # Sa mise en page, autonome et imprimable
 │   ├── rebalancing.py         # Allocation cible par classe et ordre d'arbitrage
 │   ├── fi.py                  # Patrimoine net, frais réels, capital-cible et Coast FI

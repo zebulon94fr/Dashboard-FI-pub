@@ -34,6 +34,10 @@ MOIS_FR = ["janvier", "février", "mars", "avril", "mai", "juin",
 # lui, applique la règle 5/25 et propose des ordres — c'est son travail.
 ECART_SIGNALE_PTS = 2.0
 
+# Valeur que l'onglet Historique emploie pour « Tout » : au-delà, la fenêtre
+# couvre l'historique entier.
+SANS_LIMITE = 9999
+
 
 class RapportError(ValueError):
     """Erreur de saisie renvoyée telle quelle au client (HTTP 400)."""
@@ -255,18 +259,11 @@ def _allocation():
 # ══════════════════════════════════════════════════════════════
 # ASSEMBLAGE
 # ══════════════════════════════════════════════════════════════
-def rapport_mensuel(mois=None):
-    """
-    Rapport complet d'un mois. `mois` au format « AAAA-MM », défaut : le
-    mois précédent.
-
-    Retourne toujours un dictionnaire de même forme : sans historique sur le
-    mois, `patrimoine` vaut None et `message` dit ce qui manque, plutôt que de
-    renvoyer une erreur que l'appelant aurait à interpréter.
-    """
-    mois = mois or mois_precedent()
-    debut, fin = bornes(mois)
-
+# Le calcul n'a jamais rien eu de mensuel : il porte sur un intervalle de
+# dates. Le mois n'en est qu'un cas particulier — celui qu'attend l'envoi
+# Telegram du 1er — à côté des périodes glissantes de l'onglet Historique.
+def _assembler(debut, fin, mois=None, jours=None, titre=None):
+    """Rapport d'un intervalle. Forme de retour identique quelle que soit sa cause."""
     with get_db() as db:
         serie = _serie(db, 0, debut, fin)
         depart = _valeur_avant(db, 0, debut)
@@ -276,25 +273,29 @@ def rapport_mensuel(mois=None):
         dividendes = _dividendes(db, debut, fin)
         comptes = _par_compte(db, debut, fin)
 
+    aujourdhui = datetime.date.today().isoformat()
+
     message = None
     if not serie:
-        message = (f"Aucune valorisation enregistrée en {libelle(mois)} : le dashboard ne "
-                   "tournait pas encore, ou les cours n'ont pas été actualisés ce mois-là.")
+        message = (f"Aucune valorisation enregistrée sur {titre} : le dashboard ne tournait "
+                   "pas encore, ou les cours n'ont pas été actualisés sur cette période.")
     elif depart is None:
-        message = (f"Pas de valorisation connue avant le {debut} : le mois est le premier de "
-                   "l'historique, sa variation se compte donc depuis sa première journée.")
-
-    aujourdhui = datetime.date.today().isoformat()
+        message = (f"Pas de valorisation connue avant le {serie[0][0]} : la période remonte "
+                   "au début de l'historique, sa variation se compte donc depuis sa "
+                   "première journée.")
 
     return {
         "mois": mois,
-        "libelle": libelle(mois),
+        "jours": jours,
+        "titre": titre,
+        "libelle": titre,
         "debut": debut,
         "fin": fin,
-        # Un mois encore en cours s'arrête aujourd'hui, pas à son dernier jour.
-        # Annoncer « du 1er au 31 » laisserait croire à un mois complet, et
-        # comparer ses chiffres à ceux d'un mois plein serait trompeur.
+        # Une période qui court encore s'arrête aujourd'hui, pas à sa borne.
+        # Annoncer « du 1er au 31 » quand on est le 12 laisserait croire à un
+        # mois complet, et comparer ses chiffres à un mois plein serait trompeur.
         "en_cours": debut <= aujourdhui <= fin,
+        "debut_couvert": serie[0][0] if serie else None,
         "fin_couverte": serie[-1][0] if serie else None,
         "genere_le": aujourdhui,
         "patrimoine": patrimoine,
@@ -305,3 +306,55 @@ def rapport_mensuel(mois=None):
         "allocation": _allocation(),
         "message": message,
     }
+
+
+def rapport_mensuel(mois=None):
+    """
+    Rapport d'un mois. `mois` au format « AAAA-MM », défaut : le mois précédent.
+
+    Retourne toujours un dictionnaire de même forme : sans historique sur la
+    période, `patrimoine` vaut None et `message` dit ce qui manque, plutôt que
+    de renvoyer une erreur que l'appelant aurait à interpréter.
+    """
+    mois = mois or mois_precedent()
+    debut, fin = bornes(mois)
+    return _assembler(debut, fin, mois=mois, titre=libelle(mois))
+
+
+def libelle_periode(jours):
+    """
+    « 3 derniers mois », « depuis le début » — le nom de la fenêtre, pas sa durée.
+
+    Les périodes de l'onglet Historique sont pensées en mois et en années ;
+    les restituer en jours (« 90 derniers jours ») obligerait le lecteur à
+    reconvertir ce qu'il vient de choisir.
+    """
+    if jours >= SANS_LIMITE:
+        return "tout l'historique"
+    if jours % 365 == 0:
+        annees = jours // 365
+        return "les 12 derniers mois" if annees == 1 else f"les {annees} dernières années"
+    if jours % 30 == 0 and jours >= 60:
+        return f"les {jours // 30} derniers mois"
+    return f"les {jours} derniers jours"
+
+
+def rapport_periode(jours):
+    """
+    Rapport d'une fenêtre glissante : les `jours` derniers jours, bornés à
+    aujourd'hui. C'est ce que demande le bouton de l'onglet Historique, dont
+    la période est déjà choisie à l'écran.
+    """
+    try:
+        jours = int(jours)
+    except (TypeError, ValueError):
+        raise RapportError(f"Durée illisible : « {jours} ». Attendu un nombre de jours.")
+    if jours < 1:
+        raise RapportError("La période doit couvrir au moins une journée.")
+
+    fin = datetime.date.today()
+    # Au-delà, la fenêtre couvre tout l'historique : on part d'une date que
+    # rien ne précède plutôt que de calculer une soustraction absurde.
+    debut = ("0001-01-01" if jours >= SANS_LIMITE
+             else (fin - datetime.timedelta(days=jours)).isoformat())
+    return _assembler(debut, fin.isoformat(), jours=jours, titre=libelle_periode(jours))

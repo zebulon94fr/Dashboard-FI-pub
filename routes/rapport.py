@@ -3,7 +3,8 @@ import datetime
 from flask import Blueprint, Response, jsonify, request
 
 from backend.db import get_db
-from backend.rapport import RapportError, mois_precedent, rapport_mensuel
+from backend.rapport import (RapportError, mois_precedent, rapport_mensuel,
+                             rapport_periode)
 from backend.rapport_html import page_rapport
 from routes.helpers import json_errors
 
@@ -14,13 +15,19 @@ bp = Blueprint("rapport", __name__)
 @bp.route("/rapport/<mois>", methods=["GET"])
 def rapport(mois=None):
     """
-    Rapport mensuel, en page HTML autonome. Sans mois, celui qui vient de finir.
+    Rapport en page HTML autonome, sur un mois ou sur une fenêtre glissante.
+
+    `/rapport/2026-09` pour un mois, `/rapport?jours=90` pour les trois derniers
+    mois — ce que demande le bouton de l'onglet Historique, dont la période est
+    déjà choisie à l'écran. Sans l'un ni l'autre, le mois qui vient de finir.
 
     Hors de `/api` à dessein : c'est une page qu'on garde, qu'on imprime et
-    qu'on transfère, pas un appel du frontend. Le mois se change dans l'URL.
+    qu'on transfère, pas un appel du frontend.
     """
+    jours = request.args.get("jours")
     try:
-        donnees = rapport_mensuel(mois or request.args.get("mois"))
+        donnees = (rapport_periode(jours) if jours and not mois
+                   else rapport_mensuel(mois or request.args.get("mois")))
     except RapportError as e:
         return Response(
             f"<!doctype html><meta charset='utf-8'><p style='font-family:sans-serif'>{e}</p>",
@@ -33,7 +40,9 @@ def rapport(mois=None):
 @json_errors
 def rapport_json():
     """Les mêmes données, pour un script ou un autre client."""
-    return jsonify(rapport_mensuel(request.args.get("mois")))
+    jours = request.args.get("jours")
+    return jsonify(rapport_periode(jours) if jours
+                   else rapport_mensuel(request.args.get("mois")))
 
 
 @bp.route("/api/rapport/mois-disponibles", methods=["GET"])
