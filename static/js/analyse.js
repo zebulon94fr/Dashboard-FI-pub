@@ -414,9 +414,14 @@ function renderRisquePositions(d) {
     note.innerHTML = esc(d.message || 'Mesure indisponible.');
     note.style.display = '';
 
+    // On compte les journées **enregistrées**, pas les rendements exploitables :
+    // ceux-ci tombent à zéro dès que deux lignes n'ont pas de journée commune,
+    // et annoncer « aucune clôture » sur une base qui en contient quatre-vingts
+    // ferait douter de la mesure autant que de la base.
     const attendu = d.minimum_observations || 20;
-    const avancement = d.nb_observations
-      ? `${d.nb_observations} journée${d.nb_observations > 1 ? 's' : ''} sur les ${attendu} nécessaires`
+    const jours = d.jours_connus || 0;
+    const avancement = jours
+      ? `${jours} journée${jours > 1 ? 's' : ''} enregistrée${jours > 1 ? 's' : ''} sur les ${attendu} nécessaires`
       : 'Aucune clôture quotidienne enregistrée pour l\'instant';
 
     destroyChart('chartRisque');

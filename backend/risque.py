@@ -229,6 +229,7 @@ def contribution_risque(period_days=365):
 
     if len(gardes) < MIN_OBSERVATIONS:
         return {**vide, "ecartees": ecartees, "nb_observations": len(gardes),
+                "jours_connus": len(toutes_dates),
                 "message":
                 f"{len(gardes)} journée(s) exploitable(s) après retrait des trous de plus de "
                 f"{ECART_MAX_JOURS} jours : il en faut {MIN_OBSERVATIONS}. L'historique est "
@@ -248,6 +249,7 @@ def contribution_risque(period_days=365):
     variance = sum(poids[i] * sigma_w[i] for i in range(len(poids)))
     if variance <= 0:
         return {**vide, "ecartees": ecartees, "nb_observations": len(gardes),
+                "jours_connus": len(toutes_dates),
                 "message":
                 "Variance nulle sur la période : aucune des lignes retenues n'a bougé. "
                 "C'est le cas d'un portefeuille dont les cours sont tous saisis à la main — "
@@ -296,6 +298,7 @@ def contribution_risque(period_days=365):
         "periode_jours": period_days,
         "nb_observations": len(gardes),
         "nb_journees": len(dates),
+        "jours_connus": len(toutes_dates),
         "minimum_observations": MIN_OBSERVATIONS,
         "base_annualisation": facteur,
         "volatilite_portefeuille": round(sigma_annuel, 6),
