@@ -221,9 +221,14 @@ le dashboard l'étiquette plutôt que de vous laisser conclure d'un écart qui n
 
 #### Amorcer les mesures sans attendre trois mois
 
-Ces deux vues vivent d'une série de prix par position, que le dashboard remplit à chaque
-actualisation des cours (table `cours_quotidiens`, conservée sans limite de durée). Il faut
-une vingtaine de séances avant qu'elles s'affichent.
+Ces deux vues vivent d'une série de prix par position, que le dashboard remplit **à chaque
+actualisation des cours** (table `cours_quotidiens`, conservée sans limite de durée) : la
+première journée est enregistrée dès la première actualisation faite par cette version, et
+il en faut une vingtaine avant que les mesures s'affichent.
+
+Une ligne sans ticker y figure aussi, avec son cours saisi : c'est l'actualisation qui écrit
+la clôture, pas le téléchargement. Inutile donc d'attendre d'avoir renseigné tous les
+tickers — mais une ligne dont le cours ne bouge pas est signalée comme telle dans la mesure.
 
 Pour démarrer tout de suite depuis l'historique déjà en base — `price_history` garde 90 jours
 d'actualisations :
@@ -231,6 +236,11 @@ d'actualisations :
 ```bash
 python scripts/amorcer_clotures.py
 ```
+
+Il commence par dire sur quelle base il travaille et ce qu'il y voit — positions valorisées,
+journées d'actualisations disponibles, clôtures déjà enregistrées. Lancé à la main sans la
+variable `DASHBOARD_DB` que le service lit dans `/etc/default/dashboard-fi`, il travaillerait
+sur une autre base et semblerait sans effet : la première ligne de sa sortie le montre.
 
 Le script ne réécrit jamais une clôture déjà enregistrée : le relancer ne change rien, et il
 peut tourner sur une base en service. Deux limites qu'il annonce lui-même : seules les

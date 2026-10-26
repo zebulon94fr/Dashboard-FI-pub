@@ -32,11 +32,16 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RACINE))
 
+import config                                   # noqa: E402
 from backend.db import get_db, init_db          # noqa: E402
 from backend.positions import amorcer_clotures  # noqa: E402
 
 
 def main():
+    # Le service lit souvent DASHBOARD_DB depuis /etc/default/dashboard-fi :
+    # lancé à la main sans cette variable, le script travaillerait sur une
+    # autre base et semblerait n'avoir aucun effet. Autant le dire d'emblée.
+    print(f"Base : {config.DB_FILE}")
     init_db(signaler_ancienne=False)
 
     with get_db() as db:
@@ -44,10 +49,31 @@ def main():
         disponibles = db.execute(
             "SELECT COUNT(DISTINCT substr(ts, 1, 10)) n FROM price_history"
         ).fetchone()["n"]
+        cotees = db.execute(
+            "SELECT COUNT(*) n FROM positions WHERE cours > 0"
+        ).fetchone()["n"]
+        tickers = db.execute(
+            "SELECT COUNT(*) n FROM positions WHERE TRIM(ticker) <> ''"
+        ).fetchone()["n"]
+
+    # L'état des lieux avant d'agir : sans lui, un script qui ne fait rien
+    # laisse croire à une panne alors qu'il n'avait simplement rien à reprendre.
+    print(f"Positions valorisées : {cotees} (dont {tickers} avec un ticker)")
+    print(f"Journées d'actualisations en base (price_history) : {disponibles}")
+    print(f"Clôtures déjà enregistrées : {avant}")
+
+    if not cotees:
+        print("\nAucune position valorisée : il n'y a rien à suivre. Créez vos lignes, "
+              "puis actualisez les cours.")
+        return 0
 
     if not disponibles:
-        print("Aucune actualisation de cours en base : rien à reconstituer.")
-        print("Les clôtures se rempliront d'elles-mêmes à chaque actualisation.")
+        print("\nAucune actualisation de cours en base : rien à reconstituer.")
+        print("price_history ne garde que 90 jours, et ne se remplit qu'à partir de la "
+              "première actualisation faite par cette version.")
+        print("Les clôtures se rempliront d'elles-mêmes, une par actualisation : lancez "
+              "« ./scripts/refresh_quotes.sh » ou le bouton « Actualiser les cours » pour "
+              "enregistrer la première dès maintenant.")
         return 0
 
     ajoutees, positions = amorcer_clotures()
@@ -57,9 +83,8 @@ def main():
             "SELECT COUNT(DISTINCT date) n FROM cours_quotidiens"
         ).fetchone()["n"]
 
-    print(f"{disponibles} journée(s) d'actualisations trouvée(s) dans price_history.")
-    print(f"{ajoutees} clôture(s) ajoutée(s) sur {positions} position(s)"
-          f" — {avant} clôture(s) étaient déjà enregistrées, et n'ont pas bougé.")
+    print(f"\n{ajoutees} clôture(s) ajoutée(s) sur {positions} position(s)"
+          f" — les {avant} déjà enregistrées n'ont pas bougé.")
     print(f"La série couvre maintenant {jours} journée(s) distincte(s).")
 
     if jours < 20:
