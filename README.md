@@ -39,7 +39,7 @@ lancement et tout reste sur votre machine.
 | **Rebalancing** | Allocation cible par classe d'actifs, bandes de tolérance, apport affecté en priorité et ordre de vente le moins imposé |
 | **Arbitrage IA** | Analyse du portefeuille par l'API Anthropic (optionnel, clé requise) |
 
-Également : thème clair/sombre, masquage des montants, export CSV, application installable
+Également : thème clair/sombre, masquage des montants, rapport mensuel imprimable, application installable
 (PWA) utilisable hors ligne, et interface responsive jusqu'au format mobile.
 
 ### Journal des mouvements
@@ -240,9 +240,15 @@ l'amorçage — exact pour une ligne en euros, approché pour les autres.
 
 ### Rapport mensuel
 
-Une page datable, autonome et imprimable : `/rapport` pour le mois écoulé,
-`/rapport/2026-09` pour un mois précis. Le bouton **📄 Rapport mensuel** de l'onglet
-*Historique* l'ouvre, et les liens de pied de page mènent au mois voisin.
+Une page datable, autonome et imprimable : `/rapport/2026-09` pour un mois précis, `/rapport`
+pour le dernier mois complet. Deux boutons y mènent, et leur libellé dit lequel ils ouvrent —
+**📄 Rapport mensuel** dans le bandeau pour le mois en cours, **📄 Rapport du mois écoulé**
+dans l'onglet *Historique* pour le dernier mois complet. Les liens de pied de page mènent aux
+mois voisins, quelle que soit la porte d'entrée.
+
+Un mois encore en cours s'annonce comme tel et s'arrête au dernier jour connu : afficher
+« du 1er au 31 » laisserait croire à un mois complet, et sa variation se comparerait à tort
+à celle d'un mois plein.
 
 Elle répond à la seule question qui vaille à cette échéance : sur ce que le patrimoine a
 bougé ce mois-ci, **quelle part vient du marché et quelle part de votre épargne ?** Un mois
@@ -722,7 +728,7 @@ autre client peut donc piloter le dashboard de la même façon.
 | `POST` | `/api/rebalancing/cibles` | Allocation cible par classe d'actifs |
 | `GET` | `/api/tri?nom=&account_id=` | TRI d'une position, calculé sur ses flux datés |
 | `GET` | `/api/benchmark?days=` | Indices reconvertis en euros, en base 100 et en valeur |
-| `GET` | `/api/export/csv` | Export du portefeuille |
+| `GET` | `/api/export/csv` | Export du portefeuille (sans bouton dans l'interface : ouvrez l'URL) |
 | `POST` | `/api/telegram/send` | Envoi du résumé |
 
 Les erreurs de validation renvoient `400` avec un message en français dans `{"error": …}`.

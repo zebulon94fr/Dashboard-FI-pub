@@ -57,7 +57,8 @@
     <button class="btn hide-toggle" id="btnHide" onclick="toggleHide()" title="Masquer/afficher les montants">👁</button>
     <button class="btn" id="btnTheme" onclick="toggleTheme()" title="Thème clair/sombre">🌙</button>
     <button class="btn" id="btnRefresh" onclick="refreshQuotes()">⟳ Actualiser les cours</button>
-    <button class="btn export" onclick="exportCSV()">⬇ Export CSV</button>
+    <button class="btn export" onclick="ouvrirRapportMensuel()"
+            title="Le mois en cours : ce que le patrimoine a fait, et ce qu'il doit au marché plutôt qu'à vos versements">📄 Rapport mensuel</button>
     <button class="btn primary" onclick="openAccountModal()">+ Compte</button>
     <button class="btn primary" onclick="openPositionModal()"
             title="Ajouter une ligne que vous détenez — l'achat initial est enregistré en même temps">+ Position</button>
@@ -148,8 +149,8 @@
   <div id="sec-history" class="section">
     <div class="section-header">
       <div class="section-title">Historique de valorisation</div>
-      <button class="btn" onclick="ouvrirRapportMensuel()"
-        title="Une page datable du mois écoulé : variation, part venue du marché, mouvements et écarts d'allocation">📄 Rapport mensuel</button>
+      <button class="btn" onclick="ouvrirRapportEcoule()"
+        title="Le dernier mois complet : variation, part venue du marché, mouvements et écarts d'allocation">📄 Rapport du mois écoulé</button>
     </div>
     <div class="history-controls">
       <span style="font-size:12px;color:var(--muted)">Période :</span>

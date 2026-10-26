@@ -235,12 +235,27 @@ export function renderHistory() {
 }
 
 
-/**
- * Ouvre le rapport du mois écoulé dans un onglet.
- *
- * C'est une page autonome, hors de l'application : elle s'imprime, se garde et
- * se transfère, et le mois s'y change dans l'URL. Rien à charger ici.
- */
+// Deux portes vers la même page, et deux mois différents — d'où deux libellés
+// qui le disent. Le rapport est une page autonome, hors de l'application :
+// elle s'imprime, se garde et se transfère, et les liens de son pied de page
+// mènent aux mois voisins, quel que soit celui par lequel on y entre.
+const ouvrir = mois => window.open(`${window.location.origin}/rapport/${mois}`, '_blank');
+
+/** Le mois en cours : là où on en est, le mois n'étant pas fini. */
 export function ouvrirRapportMensuel() {
-  window.open(`${window.location.origin}/rapport`, '_blank');
+  const maintenant = new Date();
+  ouvrir(`${maintenant.getFullYear()}-${String(maintenant.getMonth() + 1).padStart(2, '0')}`);
+}
+
+/**
+ * Le dernier mois complet — celui que l'envoi Telegram du 1er rapporte.
+ *
+ * Le mois se calcule ici plutôt que de laisser l'URL vide : /rapport sans mois
+ * sert déjà le mois écoulé, mais l'écrire rend le lien partageable tel quel,
+ * sans qu'il change de sens au passage d'un mois.
+ */
+export function ouvrirRapportEcoule() {
+  const maintenant = new Date();
+  const veille = new Date(maintenant.getFullYear(), maintenant.getMonth(), 0);
+  ouvrir(`${veille.getFullYear()}-${String(veille.getMonth() + 1).padStart(2, '0')}`);
 }

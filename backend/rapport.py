@@ -284,12 +284,19 @@ def rapport_mensuel(mois=None):
         message = (f"Pas de valorisation connue avant le {debut} : le mois est le premier de "
                    "l'historique, sa variation se compte donc depuis sa première journée.")
 
+    aujourdhui = datetime.date.today().isoformat()
+
     return {
         "mois": mois,
         "libelle": libelle(mois),
         "debut": debut,
         "fin": fin,
-        "genere_le": datetime.date.today().isoformat(),
+        # Un mois encore en cours s'arrête aujourd'hui, pas à son dernier jour.
+        # Annoncer « du 1er au 31 » laisserait croire à un mois complet, et
+        # comparer ses chiffres à ceux d'un mois plein serait trompeur.
+        "en_cours": debut <= aujourdhui <= fin,
+        "fin_couverte": serie[-1][0] if serie else None,
+        "genere_le": aujourdhui,
         "patrimoine": patrimoine,
         "mouvements": resume,
         "mouvements_detail": detail,

@@ -131,6 +131,21 @@ def _jour(iso):
     return f"{jour} {abreges[date.month - 1]}"
 
 
+def _periode(rapport):
+    """
+    Période réellement couverte, et non les bornes du mois.
+
+    Un mois en cours s'arrête au dernier jour connu : afficher « du 1er au 31 »
+    laisserait croire à un mois complet, et sa variation se comparerait à tort
+    à celle d'un mois plein.
+    """
+    fin = rapport.get("fin_couverte") or rapport["fin"]
+    periode = f"Du {_jour(rapport['debut'])} au {_jour(fin)}"
+    if rapport.get("en_cours"):
+        periode += " — <strong>mois en cours</strong>"
+    return f"{periode} · établi le {_jour(rapport['genere_le'])}"
+
+
 def _voisins(mois):
     """Mois précédent et suivant, pour la navigation en pied de page."""
     annee, numero = (int(p) for p in mois.split("-")[:2])
@@ -406,10 +421,7 @@ def page_rapport(rapport, base_url=""):
 <body>
 <div class="page">
   <h1>{html.escape(titre)}</h1>
-  <div class="sous-titre">
-    Du {_jour(rapport["debut"])} au {_jour(rapport["fin"])} ·
-    établi le {_jour(rapport["genere_le"])}
-  </div>
+  <div class="sous-titre">{_periode(rapport)}</div>
   {_entete(rapport)}
   {_section_comptes(rapport)}
   {_section_allocation(rapport)}

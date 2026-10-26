@@ -27,7 +27,7 @@ import {
   openImportModal, closeImportModal, onImportFile, apercuImport, validerImport,
 } from './journal.js';
 import { setPeriod, loadBenchmark, renderHistory, toggleBenchmark, setBenchmarkMode,
-         ouvrirRapportMensuel } from './history.js';
+         ouvrirRapportMensuel, ouvrirRapportEcoule } from './history.js';
 import { loadSimulation, saveProfil, onProfilChange, simUpdate } from './simulation.js';
 import { showFiscTab, renderFiscalite, calcFisc } from './fiscalite.js';
 import { loadSortie, planifierRetrait, chargerCessions, exporterCessions } from './sortie.js';
@@ -64,8 +64,6 @@ function setQuoteStatus(etat, libelle) {
     'dot ' + (etat === 'loading' ? 'loading' : etat === 'ok' ? 'ok' : '');
   document.getElementById('quoteLabel').textContent = libelle;
 }
-
-function exportCSV() { window.open(api.exportCsvUrl(), '_blank'); }
 
 // ══════════════════════════════════════════════════════════════
 // TELEGRAM
@@ -137,7 +135,7 @@ async function init() {
 // ══════════════════════════════════════════════════════════════
 Object.assign(window, {
   showTab, showAccount, toggleTheme, toggleHide, toggleComptesMenu, toggleSidebar,
-  refreshQuotes, exportCSV, sendTelegramSummary, ouvrirRapportMensuel,
+  refreshQuotes, sendTelegramSummary, ouvrirRapportMensuel, ouvrirRapportEcoule,
   openAccountModal, closeAccountModal, saveAccount, selectAccountType,
   editCurrentAccount, deleteCurrentAccount, delPos,
   openPositionModal, closeModal, savePosition, onPositionAccountChange,
