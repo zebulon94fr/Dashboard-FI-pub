@@ -238,6 +238,46 @@ journées où les cours ont effectivement été actualisés sont reconstituées,
 change n'étant pas historisé par position, les lignes en devise portent le taux du jour de
 l'amorçage — exact pour une ligne en euros, approché pour les autres.
 
+### Rapport mensuel
+
+Une page datable, autonome et imprimable : `/rapport` pour le mois écoulé,
+`/rapport/2026-09` pour un mois précis. Le bouton **📄 Rapport mensuel** de l'onglet
+*Historique* l'ouvre, et les liens de pied de page mènent au mois voisin.
+
+Elle répond à la seule question qui vaille à cette échéance : sur ce que le patrimoine a
+bougé ce mois-ci, **quelle part vient du marché et quelle part de votre épargne ?** Un mois
+à +4 000 € dont 3 500 € de versements n'est pas un bon mois de marché, c'est un bon mois
+d'épargne — les deux méritent d'être connus, et ne se pilotent pas pareil.
+
+La séparation repose sur une identité vérifiable :
+
+```
+variation du patrimoine = mouvements + gain de marché
+```
+
+« Mouvements » compte tout ce qui entre ou sort du périmètre valorisé : versements et
+retraits, mais aussi achats et ventes, qui font apparaître ou disparaître une ligne, et les
+dividendes encaissés, qui en sortent. C'est la convention du TWR employée partout ailleurs
+dans le dashboard — en changer ici donnerait deux chiffres pour la même chose.
+
+La page porte aussi la courbe du mois (les journées à mouvement y sont marquées), le détail
+compte par compte, les écarts à l'allocation cible, les mouvements et les dividendes du mois
+avec leur cumul annuel. Ni JavaScript, ni feuille de style extérieure, ni police distante :
+elle reste lisible dans cinq ans et dans un client de messagerie qui n'exécute rien.
+
+Sur un compte de passif, les signes se lisent à l'envers — un capital restant dû qui grossit
+s'affiche en rouge, pas en vert.
+
+**Envoi automatique.** Le 1er de chaque mois à 9 h, un résumé part sur Telegram avec la
+décomposition et les écarts d'allocation à surveiller. Il s'active avec le résumé
+hebdomadaire :
+
+```bash
+sudo ./scripts/install_service.sh --with-telegram
+./scripts/send_monthly_report.sh            # test immédiat, mois écoulé
+./scripts/send_monthly_report.sh 2026-09    # un mois précis
+```
+
 ### Allocation cible et rééquilibrage
 
 L'allocation se pilote **par classe d'actifs** (actions, obligations, monétaire, immobilier,
@@ -657,6 +697,10 @@ autre client peut donc piloter le dashboard de la même façon.
 | `GET` | `/api/plus-values` | Plus-values réalisées reconstituées depuis le journal |
 | `GET` | `/api/risque` | Contribution de chaque ligne au risque, et corrélations entre elles |
 | `GET` | `/api/suivi` | β, alpha et écart de suivi face à chaque indice de référence |
+| `GET` | `/rapport` `/rapport/<mois>` | Rapport mensuel, en page HTML autonome |
+| `GET` | `/api/rapport` | Les mêmes données en JSON |
+| `GET` | `/api/rapport/mois-disponibles` | Mois couverts par l'historique |
+| `POST` | `/api/telegram/rapport` | Envoie le rapport du mois écoulé sur Telegram |
 | `GET` | `/api/fiscalite/retrait` | D'où sortir une somme au moindre coût fiscal |
 | `GET` | `/api/fiscalite/abattements` | Franchises consommées et restantes sur l'année |
 | `GET` | `/api/fiscalite/cessions` | Cessions de l'année, par formulaire |
@@ -701,6 +745,8 @@ Dashboard-FI-pub/
 │   ├── performance.py         # Flux datés, TWR et TRI (XIRR)
 │   ├── analyse.py             # Risque, concentration, devises, contributions
 │   ├── risque.py              # Contribution au risque et corrélations, ligne par ligne
+│   ├── rapport.py             # Rapport mensuel : marché contre épargne
+│   ├── rapport_html.py        # Sa mise en page, autonome et imprimable
 │   ├── rebalancing.py         # Allocation cible par classe et ordre d'arbitrage
 │   ├── fi.py                  # Patrimoine net, frais réels, capital-cible et Coast FI
 │   ├── quotes.py              # Cours, taux de change et divisions de titres (yfinance)
@@ -724,6 +770,7 @@ Dashboard-FI-pub/
 │   ├── backup_db.py           # Sauvegarde cohérente + purge, sans dépendance externe
 │   ├── refresh_quotes.sh      # Actualisation des cours en local
 │   ├── send_telegram_summary.sh
+│   ├── send_monthly_report.sh # Rapport mensuel sur Telegram, le 1er
 │   ├── generate_cert.sh       # Certificat TLS auto-signé
 │   ├── set_password.py        # Authentification HTTP Basic
 │   ├── set_telegram.py        # Bot et chat_id Telegram

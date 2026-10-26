@@ -3,6 +3,7 @@ import json
 import urllib.request
 
 from backend.claude import call_claude
+from backend.rapport import rapport_mensuel
 from backend.settings import load_settings
 from backend.stats import get_stats
 
@@ -108,3 +109,65 @@ def send_weekly_summary():
     if commentaire:
         texte += "\n\n🤖 Analyse IA :\n" + commentaire
     send_telegram_message(texte)
+
+
+def build_monthly_text(rapport):
+    """
+    Résumé Telegram du mois : la décomposition d'abord, le détail ensuite.
+
+    Le message tient dans une notification. Il ne reprend pas le rapport, il
+    donne la réponse — ce que le mois doit au marché et ce qu'il doit à
+    l'épargne — et laisse la page HTML porter le reste.
+    """
+    patrimoine = rapport.get("patrimoine")
+    lignes = [f"📅 Rapport de {rapport['libelle']}", ""]
+
+    if not patrimoine:
+        lignes.append(rapport.get("message") or "Aucune donnée pour ce mois.")
+        return "\n".join(lignes)
+
+    lignes += [
+        f"💰 Patrimoine : {_fmt_eur(patrimoine['valeur_fin'])}",
+        f"📊 Variation du mois : {_fmt_eur(patrimoine['variation'])}",
+        f"   dont mouvements : {_fmt_eur(patrimoine['flux_net'])}",
+        f"   dont marché     : {_fmt_eur(patrimoine['gain_marche'])}",
+        f"📈 Performance : {_fmt_pct(patrimoine['performance'])} (hors mouvements)",
+    ]
+
+    mouvements = rapport.get("mouvements") or []
+    if mouvements:
+        lignes += ["", "Mouvements :"]
+        largeur = max(len(m["label"]) for m in mouvements)
+        for m in mouvements:
+            lignes.append(f"  {m['icone']} {m['label']:<{largeur}}  "
+                          f"{m['nb']:>2} · {_fmt_eur(m['montant'])}")
+
+    dividendes = rapport.get("dividendes") or {}
+    if dividendes.get("total"):
+        lignes += ["", f"💵 Dividendes du mois : {_fmt_eur(dividendes['total'])}"
+                       f" (cumul {_fmt_eur(dividendes['cumul_annee'])})"]
+
+    allocation = rapport.get("allocation") or {}
+    if allocation.get("nb_signales"):
+        derives = [c for c in allocation["classes"] if c["signale"]]
+        lignes += ["", "⚖️ Allocation à surveiller :"]
+        for classe in derives:
+            signe = "+" if classe["ecart_pts"] > 0 else ""
+            lignes.append(f"  {classe['label']} : {classe['poids_pct']:.1f} % "
+                          f"pour {classe['cible_pct']:.0f} % visés "
+                          f"({signe}{classe['ecart_pts']:.1f} pts)")
+
+    return "\n".join(lignes)
+
+
+def send_monthly_report(mois=None):
+    """
+    Envoie le rapport du mois écoulé. Sans `mois`, le mois précédent.
+
+    L'analyse IA n'est pas rejouée ici : le résumé hebdomadaire en porte une,
+    et un commentaire mensuel écrit sur les mêmes chiffres n'ajouterait qu'une
+    paraphrase. Le rapport, lui, apporte des chiffres que l'hebdomadaire n'a pas.
+    """
+    rapport = rapport_mensuel(mois)
+    send_telegram_message(build_monthly_text(rapport))
+    return rapport["mois"]

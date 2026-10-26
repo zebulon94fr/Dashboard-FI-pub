@@ -1,0 +1,11 @@
+[Unit]
+Description=Envoie le rapport mensuel le 1er de chaque mois à 9 h
+
+[Timer]
+OnCalendar=*-*-01 09:00:00
+# Rattrape l'envoi si le serveur était éteint le 1er : le rapport porte sur le
+# mois précédent, il reste juste quelques jours plus tard.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

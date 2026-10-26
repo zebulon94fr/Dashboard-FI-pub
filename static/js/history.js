@@ -233,3 +233,14 @@ export function renderHistory() {
     options,
   });
 }
+
+
+/**
+ * Ouvre le rapport du mois écoulé dans un onglet.
+ *
+ * C'est une page autonome, hors de l'application : elle s'imprime, se garde et
+ * se transfère, et le mois s'y change dans l'URL. Rien à charger ici.
+ */
+export function ouvrirRapportMensuel() {
+  window.open(`${window.location.origin}/rapport`, '_blank');
+}

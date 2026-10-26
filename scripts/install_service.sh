@@ -4,7 +4,7 @@
 #
 #   sudo ./scripts/install_service.sh                 # service + timers cours et sauvegarde
 #   sudo ./scripts/install_service.sh --no-timers     # service seul
-#   sudo ./scripts/install_service.sh --with-telegram # + résumé Telegram hebdomadaire
+#   sudo ./scripts/install_service.sh --with-telegram # + résumé hebdomadaire et rapport mensuel
 #
 # Le script est idempotent : relancez-le après un « git pull » pour reprendre
 # d'éventuelles modifications des unités.
@@ -199,8 +199,9 @@ if [[ $AVEC_TIMERS -eq 1 ]]; then
   info "Timers cours (horaire), sauvegarde et versements programmés (quotidiens) activés."
 fi
 if [[ $AVEC_TELEGRAM -eq 1 ]]; then
-  systemctl enable --now dashboard-fi-telegram.timer
-  info "Timer Telegram activé (samedi 9 h) — pensez à lancer scripts/set_telegram.py."
+  systemctl enable --now dashboard-fi-telegram.timer dashboard-fi-rapport.timer
+  info "Timers Telegram activés : résumé le samedi 9 h, rapport mensuel le 1er à 9 h."
+  info "Pensez à lancer scripts/set_telegram.py."
 fi
 
 # ── 7. Vérification ─────────────────────────────────────────────────────────
