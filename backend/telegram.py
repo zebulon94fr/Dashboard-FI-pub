@@ -2,7 +2,7 @@
 import json
 import urllib.request
 
-from backend.claude import call_claude
+from backend.claude import call_claude, texte_des_blocs
 from backend.rapport import rapport_mensuel
 from backend.settings import load_settings
 from backend.stats import get_stats
@@ -75,8 +75,7 @@ def generate_ai_commentary(stats):
             "system": "Tu es un conseiller financier expert des marchés et de la fiscalité française. "
                       "Réponds de façon concise et actionnable.",
         })
-        texte = "".join(bloc.get("text", "") for bloc in resultat.get("content", []))
-        return texte.strip() or None
+        return texte_des_blocs(resultat) or None
     except Exception:
         return None
 
