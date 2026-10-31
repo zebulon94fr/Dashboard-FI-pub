@@ -24,8 +24,14 @@ if [[ ! -x "$GUNICORN" ]]; then
   exit 1
 fi
 
+# Sans --timeout, gunicorn tue un worker au bout de 30 secondes. Une analyse
+# IA ou une actualisation de cours dépasse couramment ce délai : le worker
+# était alors tué en pleine attente, et le navigateur recevait un 500 nu —
+# sans le message que l'application aurait su donner. Ce délai doit rester
+# supérieur à DASHBOARD_CLAUDE_TIMEOUT (voir config.py).
 args=(
   --workers "${DASHBOARD_WORKERS:-2}"
+  --timeout "${DASHBOARD_TIMEOUT:-180}"
   --bind "${DASHBOARD_HOST:-0.0.0.0}:${DASHBOARD_PORT:-8742}"
   --access-logfile -
   --error-logfile -

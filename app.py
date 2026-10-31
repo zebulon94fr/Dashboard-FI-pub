@@ -61,6 +61,24 @@ def create_app():
     def options_handler(_unused):
         return ("", 200)
 
+    @app.errorhandler(500)
+    def erreur_interne(erreur):
+        """
+        Panne imprévue sur une route d'API : la dire en JSON.
+
+        Sans cela, Flask renvoie une page HTML que le frontend ne sait pas
+        lire : il n'affiche plus qu'« Erreur 500 », sans rien de ce qui s'est
+        passé. Un worker tué par son délai d'attente échappe en revanche à ce
+        gestionnaire — c'est le processus qui meurt, pas la requête — d'où le
+        délai de gunicorn, volontairement supérieur à celui des appels
+        sortants (voir config.py et scripts/run_server.sh).
+        """
+        if not request.path.startswith("/api/"):
+            return erreur
+        log.exception(f"Erreur interne sur {request.path}")
+        original = getattr(erreur, "original_exception", None)
+        return jsonify({"error": f"Erreur interne du serveur : {original or erreur}"}), 500
+
     @app.errorhandler(404)
     @app.errorhandler(405)
     def route_api_inconnue(erreur):

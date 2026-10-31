@@ -652,6 +652,24 @@ sudo -u dashboard ./scripts/generate_cert.sh 192.168.1.50
 Si le certificat est déclaré mais illisible, le service refuse de démarrer plutôt que de
 servir en clair sans prévenir.
 
+#### Requêtes longues
+
+Une analyse IA ou une actualisation de cours dépasse couramment les 30 secondes que
+gunicorn accorde par défaut. Passé ce délai il tue le worker : l'application n'a pas rendu
+la main, et le navigateur reçoit un `500` nu, sans rien du message qu'elle aurait su donner.
+
+Deux délais règlent cela, et leur ordre est ce qui compte — le worker doit **survivre** à
+l'appel sortant :
+
+| Variable | Défaut | Ce qu'elle borne |
+|---|---|---|
+| `DASHBOARD_CLAUDE_TIMEOUT` | 120 s | l'attente de l'API Anthropic |
+| `DASHBOARD_TIMEOUT` | 180 s | la durée d'une requête, côté gunicorn |
+
+Si vous les changez, gardez le second strictement supérieur au premier : c'est ce qui permet
+à l'application de dire « l'API n'a pas répondu en 120 secondes » plutôt que de mourir en
+silence.
+
 ### Tâches planifiées
 
 Elles sont installées avec le service et survivent au redémarrage. `Persistent=true`

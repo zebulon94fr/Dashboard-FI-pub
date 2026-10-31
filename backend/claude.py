@@ -3,6 +3,7 @@ import json
 import urllib.error
 import urllib.request
 
+import config
 from backend.settings import load_settings
 
 URL = "https://api.anthropic.com/v1/messages"
@@ -70,8 +71,13 @@ def call_claude(payload):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=config.CLAUDE_TIMEOUT) as resp:
             return json.loads(resp.read())
+    except TimeoutError:
+        raise ClaudeError(
+            f"L'API Anthropic n'a pas répondu en {config.CLAUDE_TIMEOUT} secondes. "
+            "Réessayez, ou réduisez la taille de l'analyse demandée."
+        ) from None
     except urllib.error.HTTPError as e:
         detail = _message_erreur(e)
         raise ClaudeError(
@@ -79,6 +85,11 @@ def call_claude(payload):
             + (f" : {detail}" if detail else f" ({e.reason}).")
         ) from None
     except urllib.error.URLError as e:
+        if isinstance(e.reason, TimeoutError):
+            raise ClaudeError(
+                f"L'API Anthropic n'a pas répondu en {config.CLAUDE_TIMEOUT} secondes. "
+                "Réessayez, ou réduisez la taille de l'analyse demandée."
+            ) from None
         raise ClaudeError(
             f"API Anthropic injoignable : {e.reason}. "
             "Vérifiez que le serveur a accès à Internet."
