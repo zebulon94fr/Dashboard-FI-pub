@@ -288,6 +288,51 @@ def _signaler_ancienne_base(db):
         return
 
 
+MESSAGE_LECTURE_SEULE = """\
+La base de données n'est pas accessible en écriture : {fichier}
+
+Le dashboard s'affichera, mais rien ne pourra y être enregistré — ni un
+mouvement, ni une actualisation de cours. Trois causes, par ordre de fréquence :
+
+  1. Le propriétaire du fichier. Un script lancé en root recrée les fichiers
+     de travail « -wal » et « -shm » à son nom, et le service ne peut plus
+     écrire. Rendez-les à l'utilisateur du service :
+         sudo chown <utilisateur>:<groupe> {fichier}*
+
+  2. L'isolation systemd. L'unité interdit l'écriture hors des chemins
+     déclarés dans ReadWritePaths. Après un déplacement de l'installation,
+     ce chemin ne désigne plus le bon répertoire :
+         systemctl cat dashboard-fi | grep ReadWritePaths
+     Relancer « sudo ./scripts/install_service.sh » réécrit les unités avec
+     le chemin réel.
+
+  3. Le répertoire lui-même. SQLite y écrit ses fichiers de travail : il doit
+     être accessible en écriture, pas seulement le fichier de base."""
+
+
+def _verifier_ecriture(db):
+    """
+    Constate au démarrage que la base accepte l'écriture, et le dit sinon.
+
+    Sans ce contrôle, le dashboard démarre, affiche tout, et n'échoue qu'au
+    premier enregistrement — par une erreur SQLite nue, loin de sa cause.
+    Mieux vaut l'apprendre au lancement, dans le journal du service.
+
+    Réécrire `user_version` à sa propre valeur ne change rien et exige
+    pourtant les mêmes droits qu'une vraie écriture.
+    """
+    version = db.execute("PRAGMA user_version").fetchone()[0]
+    try:
+        db.execute(f"PRAGMA user_version = {int(version)}")
+    except sqlite3.OperationalError as e:
+        if "readonly" not in str(e).lower() and "unable to open" not in str(e).lower():
+            raise
+        for ligne in MESSAGE_LECTURE_SEULE.format(fichier=config.DB_FILE).split("\n"):
+            log.error(ligne)
+        return False
+    return True
+
+
 @contextlib.contextmanager
 def get_db():
     conn = sqlite3.connect(config.DB_FILE, timeout=10)
@@ -313,6 +358,11 @@ def init_db(signaler_ancienne=True):
     lui conseille de se lancer lui-même.
     """
     with get_db() as db:
+        if not _verifier_ecriture(db):
+            # On n'interrompt pas le démarrage : une base en lecture seule
+            # reste consultable, et refuser de servir priverait de tout au
+            # lieu de priver de l'écriture. Le journal porte le diagnostic.
+            return
         db.executescript(SCHEMA)
         _migrate(db)
         for requete in INDEX_APRES_MIGRATION:

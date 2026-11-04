@@ -680,6 +680,27 @@ sudo -u dashboard ./scripts/generate_cert.sh 192.168.1.50
 Si le certificat est déclaré mais illisible, le service refuse de démarrer plutôt que de
 servir en clair sans prévenir.
 
+#### « La base n'est pas accessible en écriture »
+
+Le dashboard s'affiche mais refuse d'enregistrer quoi que ce soit. Le journal du service
+(`journalctl -u dashboard-fi`) porte le diagnostic complet au démarrage. Trois causes, par
+ordre de fréquence :
+
+1. **Le propriétaire du fichier.** Un script lancé en `root` recrée les fichiers de travail
+   `-wal` et `-shm` à son nom, et le service ne peut plus écrire. Lancez toujours les
+   scripts sous l'utilisateur du service — `sudo -u dashboard python3 scripts/…` — et
+   rendez-lui les fichiers au besoin : `sudo chown dashboard:dashboard dashboard.db*`
+2. **L'isolation systemd.** `ProtectSystem=strict` rend tout le système de fichiers en
+   lecture seule hors des chemins de `ReadWritePaths`. Après un déplacement de
+   l'installation, ce chemin ne désigne plus le bon répertoire :
+   `systemctl cat dashboard-fi | grep ReadWritePaths`. Relancer
+   `sudo ./scripts/install_service.sh` réécrit les unités avec le chemin réel.
+3. **Le répertoire lui-même.** SQLite y écrit ses fichiers de travail : il doit être
+   accessible en écriture, pas seulement le fichier de base.
+
+Le service continue de servir en lecture dans ce cas : priver de tout vaudrait moins que
+priver de l'écriture.
+
 #### Requêtes longues
 
 Une analyse IA ou une actualisation de cours dépasse couramment les 30 secondes que
