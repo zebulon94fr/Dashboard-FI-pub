@@ -216,8 +216,6 @@ CREATE INDEX IF NOT EXISTS idx_dividendes_position ON dividendes(nom, account_id
 CREATE INDEX IF NOT EXISTS idx_tx_date             ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_tx_position         ON transactions(position_id, date);
 CREATE INDEX IF NOT EXISTS idx_tx_account          ON transactions(account_id, date);
-CREATE INDEX IF NOT EXISTS idx_tx_origine          ON transactions(origine_id);
-CREATE INDEX IF NOT EXISTS idx_positions_especes   ON positions(account_id, especes);
 CREATE INDEX IF NOT EXISTS idx_programmes_compte   ON versements_programmes(account_id);
 """
 
@@ -234,6 +232,17 @@ MIGRATIONS = [
     ("transactions", "origine_id", "INTEGER REFERENCES transactions(id) ON DELETE CASCADE"),
     ("transactions", "flux", "INTEGER DEFAULT 1"),
 ]
+
+
+# Index portant sur une colonne ajoutée après coup. Ils ne peuvent pas vivre
+# dans SCHEMA : sur une base existante, « CREATE TABLE IF NOT EXISTS » ne fait
+# rien, et l'index serait créé avant que la migration n'ajoute sa colonne —
+# « no such column », et le service refuse de démarrer. Ils sont donc posés
+# après les migrations, quand les colonnes existent à coup sûr.
+INDEX_APRES_MIGRATION = (
+    "CREATE INDEX IF NOT EXISTS idx_tx_origine ON transactions(origine_id)",
+    "CREATE INDEX IF NOT EXISTS idx_positions_especes ON positions(account_id, especes)",
+)
 
 
 def _migrate(db):
@@ -306,6 +315,8 @@ def init_db(signaler_ancienne=True):
     with get_db() as db:
         db.executescript(SCHEMA)
         _migrate(db)
+        for requete in INDEX_APRES_MIGRATION:
+            db.execute(requete)
         if signaler_ancienne:
             _signaler_ancienne_base(db)
     log.info(f"Base initialisée : {config.DB_FILE}")
