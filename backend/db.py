@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS positions (
     cours        REAL    DEFAULT 0,
     devise       TEXT    DEFAULT 'EUR',
     taux_change  REAL    DEFAULT 1.0,
+    especes      INTEGER DEFAULT 0,               -- cette ligne porte les espèces du compte
     cout_eur     REAL    DEFAULT NULL,            -- prix de revient en euros, figé à l'achat
     valorisation REAL    DEFAULT 0,
     pv_latent    REAL    DEFAULT 0,
@@ -71,6 +72,18 @@ CREATE TABLE IF NOT EXISTS positions (
 -- (achat et versement font entrer de l'argent, vente, retrait et frais en font
 -- sortir). `nom` duplique le libellé de la position pour que le journal reste
 -- lisible après la suppression de celle-ci.
+--
+-- Quand un compte tient une ligne d'espèces (`positions.especes`), chaque
+-- mouvement y inscrit sa **contrepartie** : acheter un titre vend des espèces,
+-- un versement en achète. `origine_id` relie la contrepartie au mouvement qui
+-- l'a engendrée — la supprimer supprime l'autre.
+--
+-- `flux` dit si le mouvement compte comme un flux externe. La règle tient en
+-- une phrase : **une paire ne vaut jamais que le flux voulu par son origine.**
+-- Un achat ne fait entrer aucun argent neuf quand il est réglé en espèces
+-- déjà détenues : sa contrepartie porte donc `flux=1` et annule la sienne.
+-- Un versement, lui, fait bien entrer de l'argent : sa contrepartie porte
+-- `flux=0`, car le versement compte déjà pour les deux.
 CREATE TABLE IF NOT EXISTS transactions (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     date         TEXT    NOT NULL,                -- YYYY-MM-DD
@@ -84,6 +97,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     taux_change  REAL    DEFAULT 1.0,             -- devise -> EUR au jour de l'opération
     frais        REAL    DEFAULT 0,               -- en euros
     montant_eur  REAL    DEFAULT 0,               -- montant du mouvement en euros, frais compris
+    origine_id   INTEGER REFERENCES transactions(id) ON DELETE CASCADE,
+    flux         INTEGER DEFAULT 1,               -- 0 : n'entre pas dans les flux externes
     note         TEXT    DEFAULT '',
     created_at   TEXT    DEFAULT (datetime('now'))
 );
@@ -201,6 +216,8 @@ CREATE INDEX IF NOT EXISTS idx_dividendes_position ON dividendes(nom, account_id
 CREATE INDEX IF NOT EXISTS idx_tx_date             ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_tx_position         ON transactions(position_id, date);
 CREATE INDEX IF NOT EXISTS idx_tx_account          ON transactions(account_id, date);
+CREATE INDEX IF NOT EXISTS idx_tx_origine          ON transactions(origine_id);
+CREATE INDEX IF NOT EXISTS idx_positions_especes   ON positions(account_id, especes);
 CREATE INDEX IF NOT EXISTS idx_programmes_compte   ON versements_programmes(account_id);
 """
 
@@ -213,6 +230,9 @@ MIGRATIONS = [
     ("positions", "ter", "REAL DEFAULT 0"),
     ("accounts", "frais_pct", "REAL DEFAULT 0"),
     ("accounts", "detenteur", "TEXT DEFAULT ''"),
+    ("positions", "especes", "INTEGER DEFAULT 0"),
+    ("transactions", "origine_id", "INTEGER REFERENCES transactions(id) ON DELETE CASCADE"),
+    ("transactions", "flux", "INTEGER DEFAULT 1"),
 ]
 
 

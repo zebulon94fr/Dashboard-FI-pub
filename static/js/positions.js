@@ -62,6 +62,7 @@ export function openPositionModal(positionId = null) {
   el('fZone').value    = position?.zone || '';
   el('fTaux').value    = position?.devise && position.devise !== 'EUR' ? position.taux_change : '';
   el('fGroupe').value  = position?.groupe || '';
+  el('fEspeces').checked = Boolean(position?.especes);
   el('fTer').value     = position?.ter || '';
 
   el('fClasse').innerHTML = (Store.CLASSES || [])
@@ -120,6 +121,21 @@ export function onPositionDeviseChange() {
 
 export function closeModal() { el('posModal').classList.remove('open'); }
 
+/**
+ * Une ligne d'espèces se compte en euros : PRU et cours valent 1, et son
+ * ticker n'a pas de sens. On remplit ce qu'on sait plutôt que de laisser
+ * l'utilisateur deviner la convention.
+ */
+export function onPositionEspecesChange() {
+  if (!el('fEspeces').checked) return;
+  el('fPru').value = 1;
+  el('fCours').value = 1;
+  el('fTicker').value = '';
+  if (!el('fNom').value.trim()) el('fNom').value = 'Liquidités';
+  const classe = el('fClasse');
+  if (classe && [...classe.options].some(o => o.value === 'monetaire')) classe.value = 'monetaire';
+}
+
 export async function savePosition() {
   const erreur = el('positionError');
   erreur.textContent = '';
@@ -138,6 +154,7 @@ export async function savePosition() {
     classe: el('fClasse').value,
     groupe: el('fGroupe').value.trim(),
     ter: parseNum(el('fTer').value),
+    especes: el('fEspeces').checked,
     taux_change: el('fTaux').value.trim() ? parseNum(el('fTaux').value) : null,
   };
 

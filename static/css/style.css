@@ -323,3 +323,7 @@ input:focus,select:focus{border-color:var(--accent)}
   background:var(--surface2);min-width:46px;font-variant-numeric:tabular-nums}
 .matrice td.matrice-diagonale{color:var(--muted)}
 .matrice-wrap{overflow-x:auto}
+
+/* Une contrepartie en espèces n'a pas été saisie à la main : elle s'efface
+   légèrement, et ne porte pas de boutons — on agit sur son origine. */
+.tx-auto td{opacity:.72}

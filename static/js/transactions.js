@@ -202,8 +202,8 @@ export async function loadTransactions() {
   const realise = (d.plus_values || []).reduce((somme, l) => somme + l.pv_realisee, 0);
 
   el('txCards').innerHTML =
-    kpiCard('Capital engagé', fmt(entrees), 'achats et versements', 'neu') +
-    kpiCard('Capital retiré', fmt(sorties), 'ventes, retraits et frais', 'neu') +
+    kpiCard('Capital engagé', fmt(entrees), 'ce qui est entré dans l\'enveloppe', 'neu') +
+    kpiCard('Capital retiré', fmt(sorties), 'ce qui en est sorti', 'neu') +
     kpiCard('Flux net', fmt(entrees - sorties), 'ce qui est encore investi', 'neu') +
     kpiCard('Plus-values réalisées', fmt(realise),
       `${(d.plus_values || []).length} ligne${(d.plus_values || []).length > 1 ? 's' : ''} vendue${(d.plus_values || []).length > 1 ? 's' : ''}`,
@@ -266,18 +266,23 @@ function renderJournal(mouvements) {
     const fx = (t.devise && t.devise !== 'EUR')
       ? `<span class="fx-hint">× ${Number(t.taux_change).toFixed(4)}</span>` : '';
 
-    return `<tr>
+    // Une contrepartie en espèces est écrite par le journal, pas par
+    // l'utilisateur : elle se modifie et se supprime depuis son origine.
+    const auto = Boolean(t.origine_id);
+
+    return `<tr${auto ? ' class="tx-auto"' : ''}>
       <td ${TD}>${esc(fmtDate(t.date))}</td>
-      <td ${TD}><span class="tag tx-${esc(t.type)}">${esc(info.icone)} ${esc(info.label)}</span></td>
+      <td ${TD}><span class="tag tx-${esc(t.type)}">${esc(info.icone)} ${esc(info.label)}</span>${
+        auto ? ' <span class="tag tag-mini" title="Écrite par le journal en face du mouvement d\'origine">contrepartie</span>' : ''}</td>
       <td ${TD}>${badgeType(t.compte_type)} ${esc(t.compte || '')}</td>
       <td ${TD}>${t.nom ? esc(t.nom) : '<span class="muted">—</span>'}</td>
       <td ${TD}>${detail}${fx}</td>
       <td ${TD} style="text-align:right">${t.frais ? fmt(t.frais) : '<span class="muted">—</span>'}</td>
       <td ${TD} style="text-align:right" class="${t.type === 'frais' ? 'neg' : 'neu'}">${signe} ${fmt(t.montant_eur)}</td>
       <td ${TD} class="muted" style="font-size:12px">${esc(t.note || '')}</td>
-      <td ${TD} class="actions">
+      <td ${TD} class="actions">${auto ? '' : `
         <button class="btn btn-mini" onclick="editTransaction(${t.id})" title="Modifier">✏️</button>
-        <button class="btn btn-mini" onclick="deleteTransaction(${t.id})" title="Supprimer">🗑</button>
+        <button class="btn btn-mini" onclick="deleteTransaction(${t.id})" title="Supprimer">🗑</button>`}
       </td>
     </tr>`;
   }).join('');

@@ -11,6 +11,7 @@ import {
 import {
   openPositionModal, closeModal, savePosition,
   onPositionAccountChange, onPositionDeviseChange, onPositionAchatChange,
+  onPositionEspecesChange,
 } from './positions.js';
 import {
   openDivModal, closeDivModal, saveDividende, deleteDividende,
@@ -139,7 +140,7 @@ Object.assign(window, {
   openAccountModal, closeAccountModal, saveAccount, selectAccountType,
   editCurrentAccount, deleteCurrentAccount, delPos,
   openPositionModal, closeModal, savePosition, onPositionAccountChange,
-  onPositionDeviseChange, onPositionAchatChange,
+  onPositionDeviseChange, onPositionAchatChange, onPositionEspecesChange,
   openDivModal, closeDivModal, saveDividende, deleteDividende, editDividende,
   loadDividendes, onDividendeAccountChange,
   openTxModal, closeTxModal, saveTransaction, editTransaction, deleteTransaction,

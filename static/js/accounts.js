@@ -143,7 +143,9 @@ export function renderAccountPage() {
     const fx = devise !== 'EUR' && p.taux_change
       ? `<span class="fx-hint">×${p.taux_change.toFixed(4)}</span>` : '';
     return `<tr>
-      <td>${esc(p.nom)}${p.isin ? `<div class="cell-sub">${esc(p.isin)}</div>` : ''}</td>
+      <td>${esc(p.nom)}${p.especes
+        ? ' <span class="tag tag-mini" title="Les achats et ventes du compte se règlent sur cette ligne">espèces</span>'
+        : ''}${p.isin ? `<div class="cell-sub">${esc(p.isin)}</div>` : ''}</td>
       <td class="mono">${esc(p.ticker) || '<span class="muted">manuel</span>'}</td>
       <td>${fmtQty(p.quantite, t.decimales)}</td>
       <td>${fmtDevise(p.cours, devise)}${fx}</td>

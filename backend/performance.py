@@ -46,6 +46,11 @@ def flux_externes(account_id=None, depuis=None):
         conditions_div.append("date >= ?")
         params_div.append(depuis)
 
+    # Une contrepartie en espèces porte `flux=0` quand son origine compte déjà
+    # le flux pour les deux (versement, retrait, frais). La compter aussi
+    # doublerait l'apport : voir le préambule de backend/transactions.py.
+    conditions_tx.append("COALESCE(flux, 1) = 1")
+
     ou_tx = ("WHERE " + " AND ".join(conditions_tx)) if conditions_tx else ""
     ou_div = ("WHERE " + " AND ".join(conditions_div)) if conditions_div else ""
 

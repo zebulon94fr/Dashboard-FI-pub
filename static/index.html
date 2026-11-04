@@ -884,6 +884,21 @@
       <code>BTC-EUR</code> (Bitcoin), <code>GC=F</code> (once d'or).
       Sans ticker, le cours reste celui que vous saisissez ici.
     </div>
+    <div class="form-row">
+      <div class="form-group full">
+        <label class="sim-check" style="font-size:12.5px;text-transform:none;color:var(--text)">
+          <input type="checkbox" id="fEspeces" onchange="onPositionEspecesChange()">
+          Cette ligne porte les <strong>espèces du compte</strong>
+        </label>
+        <div class="chart-hint" style="text-align:left;margin-top:6px">
+          Les achats et les ventes du compte s'y règleront tout seuls : acheter un titre y
+          inscrit la sortie d'espèces correspondante, un versement l'entrée. Sans elle, les
+          liquidités restent hors du patrimoine, et convertir du cash en titres le fait
+          bondir comme si l'argent venait de nulle part. Quantité en euros, PRU et cours à 1.
+        </div>
+      </div>
+    </div>
+
     <div class="form-row" id="fAchatRow">
       <div class="form-group full">
         <label class="sim-check" style="font-size:12.5px;text-transform:none;color:var(--text)">

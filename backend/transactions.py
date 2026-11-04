@@ -11,6 +11,12 @@ Deux familles de mouvements, distinguées par `ligne` dans le catalogue :
   * `versement`, `retrait` et `frais` portent sur l'enveloppe entière et ne
     servent qu'à dater les flux (TWR, TRI — voir performance.py).
 
+Un compte peut tenir une **ligne d'espèces** (`positions.especes`). Le journal
+y inscrit alors tout seul la contrepartie de chaque mouvement, en double
+partie : acheter un titre vend des espèces, un versement en achète. Sans cela,
+les liquidités restent hors du patrimoine valorisé, et convertir du cash en
+titres fait bondir le patrimoine comme si l'argent venait de nulle part.
+
 Le prix moyen pondéré suit la règle française : un achat le fait bouger, une
 vente ne le change pas et sort une quote-part du prix de revient.
 """
@@ -23,6 +29,78 @@ from catalog import ORDRE_TRANSACTIONS, TYPES_TRANSACTION
 
 class TransactionError(ValueError):
     """Erreur de validation renvoyée telle quelle au client (HTTP 400)."""
+
+
+# ══════════════════════════════════════════════════════════════
+# CONTREPARTIE EN ESPÈCES
+# ══════════════════════════════════════════════════════════════
+# Le mouvement qu'écrit l'utilisateur, et celui que le journal inscrit en face.
+# Le sens s'inverse : ce qui entre quelque part sort d'ailleurs.
+CONTREPARTIE = {
+    "achat": "vente", "vente": "achat",
+    "versement": "achat", "retrait": "vente", "frais": "vente",
+}
+
+# Une paire ne vaut jamais que le flux voulu par son origine.
+#
+# Un achat réglé en espèces déjà détenues ne fait entrer aucun argent neuf :
+# sa contrepartie compte donc comme un flux, et annule celui de l'achat. Un
+# versement, lui, fait bien entrer de l'argent : sa contrepartie n'en est pas
+# un, puisque le versement le porte déjà pour les deux.
+CONTREPARTIE_EST_UN_FLUX = {"achat", "vente"}
+
+NOTE_CONTREPARTIE = "Contrepartie en espèces, inscrite par le journal"
+
+
+def ligne_especes(db, account_id, sauf=None):
+    """La ligne qui porte les espèces du compte, s'il en tient une."""
+    ligne = db.execute(
+        "SELECT * FROM positions WHERE account_id=? AND especes=1 LIMIT 1", (account_id,)
+    ).fetchone()
+    return None if ligne is None or ligne["id"] == sauf else ligne
+
+
+def _inscrire_contrepartie(db, champs, origine_id):
+    """
+    Inscrit en face du mouvement son mouvement d'espèces, s'il y a lieu.
+
+    La quantité vaut le montant en euros et le prix unitaire 1 : une ligne
+    d'espèces se compte en euros, son PRU reste à 1 et ne porte donc jamais de
+    plus-value. Les frais sont déjà compris dans `montant_eur`, ce qui fait
+    sortir des espèces ce que l'opération a réellement coûté.
+    """
+    especes = ligne_especes(db, champs["account_id"], sauf=champs["position_id"])
+    if especes is None:
+        return
+    montant = round(champs["montant_eur"], 2)
+    if montant <= 0:
+        return
+
+    type_contrepartie = CONTREPARTIE[champs["type"]]
+    db.execute("""
+        INSERT INTO transactions
+          (date, account_id, position_id, type, nom, quantite, prix,
+           devise, taux_change, frais, montant_eur, origine_id, flux, note)
+        VALUES (?,?,?,?,?,?,?,'EUR',1.0,0,?,?,?,?)
+    """, (
+        champs["date"], champs["account_id"], especes["id"], type_contrepartie,
+        especes["nom"], montant, 1.0, montant, origine_id,
+        1 if champs["type"] in CONTREPARTIE_EST_UN_FLUX else 0,
+        NOTE_CONTREPARTIE,
+    ))
+    recalc_position(especes["id"], db)
+
+
+def _retirer_contrepartie(db, origine_id):
+    """Supprime la contrepartie d'un mouvement, et recalcule la ligne d'espèces."""
+    ligne = db.execute(
+        "SELECT id, position_id FROM transactions WHERE origine_id=?", (origine_id,)
+    ).fetchone()
+    if ligne is None:
+        return
+    db.execute("DELETE FROM transactions WHERE id=?", (ligne["id"],))
+    if ligne["position_id"]:
+        recalc_position(ligne["position_id"], db)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -280,10 +358,15 @@ def plus_values_realisees(account_id=None, annee=None):
     clause = ("WHERE " + " AND ".join(where)) if where else ""
 
     with get_db() as db:
+        # Une ligne d'espèces s'achète et se vend à 1 € : sa plus-value est
+        # nulle par construction, et la faire figurer parmi les lignes cédées
+        # ferait croire à une opération imposable là où il n'y a qu'un virement.
         lignes = db.execute(f"""
             SELECT t.position_id, t.nom, t.account_id, a.nom compte, a.type compte_type
-            FROM transactions t LEFT JOIN accounts a ON a.id = t.account_id
-            {clause}
+            FROM transactions t
+            LEFT JOIN accounts a ON a.id = t.account_id
+            LEFT JOIN positions p ON p.id = t.position_id
+            {clause}{' AND' if clause else 'WHERE'} COALESCE(p.especes, 0) = 0
             GROUP BY t.position_id, t.nom, t.account_id
         """, params).fetchall()
 
@@ -337,11 +420,24 @@ def get_transactions(filters=None):
             {clause} ORDER BY t.date DESC, t.id DESC
         """, params).fetchall()
 
+        # Capital engagé et retiré comptent ce qui **traverse la frontière**
+        # de l'enveloppe, pas chaque écriture. Un achat réglé en espèces déjà
+        # détenues n'apporte rien de neuf : lui comme sa contrepartie sortent
+        # du compte. Sans cela, verser 700 € puis en investir 612 afficherait
+        # 2 012 € de capital engagé pour 700 € réellement apportés.
+        # Est externe le mouvement qui n'est pas une contrepartie, et dont la
+        # contrepartie — s'il en a une — ne porte pas elle-même de flux. Un
+        # versement a bien une contrepartie en espèces, mais elle est marquée
+        # `flux = 0` : le versement reste donc un apport. Un achat réglé en
+        # espèces, lui, a une contrepartie qui annule la sienne : les deux
+        # sortent du compte.
+        externe = ("t.origine_id IS NULL AND NOT EXISTS "
+                   "(SELECT 1 FROM transactions c WHERE c.origine_id = t.id AND c.flux = 1)")
         stats = db.execute(f"""
             SELECT COUNT(*) nb,
-                   ROUND(SUM(CASE WHEN type IN ('achat','versement')
+                   ROUND(SUM(CASE WHEN type IN ('achat','versement') AND {externe}
                                   THEN montant_eur ELSE 0 END), 2) total_entrees,
-                   ROUND(SUM(CASE WHEN type IN ('vente','retrait','frais')
+                   ROUND(SUM(CASE WHEN type IN ('vente','retrait','frais') AND {externe}
                                   THEN montant_eur ELSE 0 END), 2) total_sorties,
                    MIN(date) premier, MAX(date) dernier
             FROM transactions t {clause}
@@ -369,16 +465,22 @@ def add_transaction(payload):
         ))
         if champs["position_id"]:
             recalc_position(champs["position_id"], db)
+        _inscrire_contrepartie(db, champs, cur.lastrowid)
         return cur.lastrowid
 
 
 def update_transaction(transaction_id, payload):
     with get_db() as db:
         ancienne = db.execute(
-            "SELECT position_id FROM transactions WHERE id=?", (transaction_id,)
+            "SELECT position_id, origine_id FROM transactions WHERE id=?", (transaction_id,)
         ).fetchone()
         if not ancienne:
             raise TransactionError("Mouvement introuvable.")
+        if ancienne["origine_id"]:
+            raise TransactionError(
+                "Ce mouvement est la contrepartie en espèces d'un autre : modifiez "
+                "le mouvement d'origine, sa contrepartie suivra."
+            )
 
         champs = _valide(db, payload)
         db.execute("""
@@ -396,14 +498,28 @@ def update_transaction(transaction_id, payload):
         for position_id in {ancienne["position_id"], champs["position_id"]} - {None}:
             recalc_position(position_id, db)
 
+        # Montant, date ou compte ont pu changer : on réécrit la contrepartie
+        # plutôt que de la rapiécer champ par champ.
+        _retirer_contrepartie(db, transaction_id)
+        _inscrire_contrepartie(db, champs, transaction_id)
+
 
 def delete_transaction(transaction_id):
     with get_db() as db:
         ligne = db.execute(
-            "SELECT position_id FROM transactions WHERE id=?", (transaction_id,)
+            "SELECT position_id, origine_id FROM transactions WHERE id=?", (transaction_id,)
         ).fetchone()
         if not ligne:
             raise TransactionError("Mouvement introuvable.")
+        if ligne["origine_id"]:
+            raise TransactionError(
+                "Ce mouvement est la contrepartie en espèces d'un autre : supprimez "
+                "le mouvement d'origine, sa contrepartie partira avec lui."
+            )
+
+        # La contrepartie part d'abord : son `origine_id` la ferait disparaître
+        # en cascade, mais la ligne d'espèces resterait à recalculer.
+        _retirer_contrepartie(db, transaction_id)
         db.execute("DELETE FROM transactions WHERE id=?", (transaction_id,))
         if ligne["position_id"]:
             recalc_position(ligne["position_id"], db)

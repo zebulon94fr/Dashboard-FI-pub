@@ -6,7 +6,7 @@ from backend.db import get_db
 from catalog import CLASSES_ACTIFS, ORDRE_CLASSES, TYPES_PASSIF, classe_par_defaut
 
 CHAMPS = ("nom", "ticker", "isin", "secteur", "zone", "classe", "groupe",
-          "ter", "quantite", "pru", "cours", "devise")
+          "ter", "quantite", "pru", "cours", "devise", "especes")
 
 
 class PositionError(ValueError):
@@ -126,6 +126,11 @@ def _valide(payload, partiel=False):
     if "ter" in payload:
         out["ter"] = min(10.0, max(0.0, nombre(payload.get("ter"))))
 
+    # Ligne d'espèces : celle qui règle les achats du compte. Son cours vaut 1
+    # et sa quantité des euros, si bien que sa valorisation est le solde.
+    if "especes" in payload:
+        out["especes"] = 1 if payload.get("especes") in (1, "1", True, "true", "on") else 0
+
     # Prix de revient réel en euros, facultatif : le journal le renseigne tout
     # seul, mais on peut le saisir pour une position reprise d'un historique.
     if "cout_eur" in payload:
@@ -133,6 +138,26 @@ def _valide(payload, partiel=False):
         out["cout_eur"] = nombre(valeur) if valeur not in (None, "") else None
 
     return out
+
+
+def _verifier_unicite_especes(db, account_id, veut_especes, position_id=None):
+    """
+    Un compte ne tient qu'une ligne d'espèces : deux solde le même argent deux fois.
+
+    On refuse plutôt que de déplacer le marqueur en silence — l'utilisateur
+    saurait mal laquelle de ses deux lignes règle désormais ses achats.
+    """
+    if not veut_especes:
+        return
+    existante = db.execute(
+        "SELECT id, nom FROM positions WHERE account_id=? AND especes=1 AND id IS NOT ?",
+        (account_id, position_id),
+    ).fetchone()
+    if existante:
+        raise PositionError(
+            f"Ce compte tient déjà « {existante['nom']} » comme ligne d'espèces. "
+            "Décochez-la d'abord : deux lignes d'espèces solderaient le même argent deux fois."
+        )
 
 
 def row_to_position(row):
@@ -199,6 +224,7 @@ def create_position(account_id, payload):
         # un classement par défaut discutable qu'un portefeuille « non classé ».
         if not champs.get("classe"):
             champs["classe"] = classe_par_defaut(compte["type"])
+        _verifier_unicite_especes(db, account_id, champs.get("especes"))
         taux = resoudre_taux(db, champs["devise"], payload.get("taux_change"))
         # Sans journal de mouvements, le prix de revient reste estimé au taux
         # du jour : c'est le journal qui le fige (voir transactions.py).
@@ -208,14 +234,14 @@ def create_position(account_id, payload):
             INSERT INTO positions
               (account_id, nom, ticker, isin, secteur, zone, classe, groupe, ter,
                quantite, pru, cours, devise, taux_change, cout_eur,
-               valorisation, pv_latent, pv_pct)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+               valorisation, pv_latent, pv_pct, especes)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             account_id, champs["nom"], champs.get("ticker", ""), champs.get("isin", ""),
             champs.get("secteur", ""), champs.get("zone", ""),
             champs.get("classe", ""), champs.get("groupe", ""), champs.get("ter", 0),
             champs["quantite"], champs["pru"], champs["cours"],
-            champs["devise"], taux, cout_eur, valo, pv, pct,
+            champs["devise"], taux, cout_eur, valo, pv, pct, champs.get("especes", 0),
         ))
         position_id = cur.lastrowid
 
@@ -248,6 +274,8 @@ def update_position(position_id, payload):
             raise PositionError("Position introuvable.")
 
         fusion = {**dict(actuelle), **champs}
+        _verifier_unicite_especes(db, actuelle["account_id"], fusion.get("especes"),
+                                  position_id)
         taux = (resoudre_taux(db, fusion["devise"], payload.get("taux_change"))
                 if fusion["devise"] != actuelle["devise"] else actuelle["taux_change"])
         cout_eur = fusion.get("cout_eur")
@@ -258,13 +286,13 @@ def update_position(position_id, payload):
               nom=?, ticker=?, isin=?, secteur=?, zone=?, classe=?, groupe=?, ter=?,
               quantite=?, pru=?, cours=?,
               devise=?, taux_change=?, valorisation=?, pv_latent=?, pv_pct=?,
-              updated_at=datetime('now')
+              especes=?, updated_at=datetime('now')
             WHERE id=?
         """, (
             fusion["nom"], fusion["ticker"], fusion["isin"], fusion["secteur"], fusion["zone"],
             fusion.get("classe") or "", fusion.get("groupe") or "", fusion.get("ter") or 0,
             fusion["quantite"], fusion["pru"], fusion["cours"],
-            fusion["devise"], taux, valo, pv, pct, position_id,
+            fusion["devise"], taux, valo, pv, pct, fusion.get("especes") or 0, position_id,
         ))
 
     # Le journal reste maître : si la position en a un, il réécrit quantité,

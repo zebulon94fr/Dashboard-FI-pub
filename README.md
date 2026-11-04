@@ -76,6 +76,34 @@ sont recalculés depuis le journal et ne se saisissent plus à la main. Un achat
 déjà l'argent qui entre, ne doublez pas l'écriture avec un versement pour la même somme :
 le versement sert aux enveloppes dont vous ne détaillez pas les lignes.
 
+#### La ligne d'espèces
+
+Le patrimoine affiché est la somme des lignes valorisées. Les liquidités d'un compte-titres
+n'en sont une que si vous les déclarez — sans quoi convertir du cash en titres fait bondir
+le patrimoine comme si l'argent venait de nulle part, et le rapport mensuel attribue l'écart
+au marché.
+
+Cochez **« Cette ligne porte les espèces du compte »** sur une position (nom libre, PRU et
+cours à 1, quantité en euros) : le journal y inscrit dès lors la **contrepartie** de chaque
+mouvement, en double partie.
+
+| Vous saisissez | Le journal inscrit en face | Patrimoine | Flux |
+|---|---|---|---|
+| Versement de 700 € | achat de 700 € d'espèces | +700 € | +700 € |
+| Achat de 612,15 € d'ETF | vente de 612,15 € d'espèces | inchangé | inchangé |
+| Vente de 205 € d'ETF | achat de 205 € d'espèces | inchangé | inchangé |
+| Frais de 7,85 € | vente de 7,85 € d'espèces | −7,85 € | −7,85 € |
+
+La règle tient en une phrase : **une paire ne vaut jamais que le flux voulu par son
+origine.** Un achat réglé en espèces déjà détenues ne fait entrer aucun argent neuf — sa
+contrepartie annule son flux. Un versement, lui, en fait entrer — sa contrepartie n'ajoute
+alors aucun flux, le versement le portant déjà pour les deux.
+
+Une contrepartie est marquée comme telle dans le journal et n'a pas de boutons : elle suit
+son mouvement d'origine, qu'on modifie ou qu'on supprime à sa place. Un compte ne tient
+qu'une ligne d'espèces, et un compte qui n'en tient pas garde le comportement d'avant :
+l'achat y reste un apport, ce qui est juste tant que les liquidités ne sont pas suivies.
+
 #### Trois façons de le remplir sans tout ressaisir
 
 - **Importer un relevé, CSV ou Excel.** Aucun courtier n'exporte le même fichier : le format
@@ -839,6 +867,7 @@ versements_programmes          (mouvements récurrents, rattachés à un compte)
 
 accounts ──┬── positions ──┬── price_history      (actualisations, purgées à 90 jours)
            │                └── cours_quotidiens   (une clôture par jour, conservée)
+           │                    (especes = 1 : la ligne qui règle les achats du compte)
            ├── transactions ──── (position_id : achats et ventes)
            ├── dividendes
            └── history_daily / history_intraday   (account_id = 0 : total du portefeuille)
@@ -847,6 +876,10 @@ accounts ──┬── positions ──┬── price_history      (actualisa
 `cours_quotidiens` est la série dont vivent les corrélations, la contribution au risque et
 le β : `price_history` suit les actualisations et se purge à 90 jours, elle sert à afficher
 la journée, pas à mesurer un risque.
+
+`transactions.origine_id` relie une contrepartie en espèces au mouvement qui l'a engendrée —
+la supprimer supprime l'autre — et `transactions.flux` dit si le mouvement compte comme un
+flux externe (voir « La ligne d'espèces »).
 
 `transactions` est la source de vérité des positions qui en ont une : `quantite`, `pru` et
 `cout_eur` en sont dérivés à chaque écriture. Une position sans mouvement garde sa saisie
